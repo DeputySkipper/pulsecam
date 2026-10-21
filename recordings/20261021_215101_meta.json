@@ -1,0 +1,170 @@
+{
+  "stamp": "20261021_215101",
+  "created": "2026-10-21T21:51:01",
+  "source": "webcam",
+  "ref_bpm": 76.0,
+  "device": "pulse count",
+  "light_frame": false,
+  "notes": "No re-lock flags: recorded before the relock column existed, and a replay of the video never re-synchronised with the live means, so the live re-lock events could not be recovered. Evaluated without them. Reference 76 is a hand count (lower confidence).",
+  "settings": {
+    "ROI_SET": "cheeks",
+    "FREEZE_ROI": true,
+    "BAND_LO": 0.9,
+    "BAND_HI": 3.0,
+    "WINDOW_SEC": 15.0,
+    "MIN_SEC": 10.0,
+    "method": "CHROM"
+  },
+  "config": {
+    "BAND_HI": 3.0,
+    "BAND_LO": 0.9,
+    "BOX_EMA_ALPHA": 0.3,
+    "CAM_INDEX": 0,
+    "CAM_WARMUP_SEC": 3.0,
+    "CONFIRM_AGREE_BPM": 5.0,
+    "CONFIRM_ESTIMATES": 3,
+    "DEFAULT_METHOD": "CHROM",
+    "DETECT_DOWNSCALE": 2,
+    "DETECT_EVERY_N": 3,
+    "FACE_LOST_SEC": 1.0,
+    "FILTER_ORDER": 3,
+    "FPS_REQUEST": 30,
+    "FRAME_H": 480,
+    "FRAME_W": 640,
+    "FREEZE_ROI": true,
+    "FS": 30.0,
+    "GAP_RESET_SEC": 1.0,
+    "HAAR_MIN_NEIGHBORS": 5,
+    "HAAR_MIN_SIZE": 80,
+    "HAAR_SCALE_FACTOR": 1.1,
+    "HOLD_MAX_SEC": 5.0,
+    "JUMP_PERSIST": 5,
+    "LIGHT_FRAME_DEFAULT": false,
+    "LIGHT_FRAME_PX": 100,
+    "LOW_LIGHT_LEVEL": 120.0,
+    "LOW_LIGHT_WINDOW_SEC": 1.0,
+    "MAX_JUMP_BPM": 15,
+    "MIN_CHANNEL_MEAN": 1e-06,
+    "MIN_PULSE_STD": 1e-09,
+    "MIN_SEC": 10.0,
+    "MOCK_AMPLITUDE": 0.005,
+    "MOCK_BASE_RGB": [
+      0.75,
+      0.6,
+      0.55
+    ],
+    "MOCK_BPM": 72.0,
+    "MOCK_DIM_GAIN": 0.3,
+    "MOCK_DRIFT_AMP": 0.01,
+    "MOCK_DRIFT_HZ": 0.05,
+    "MOCK_HZ": 30.0,
+    "MOCK_NOISE_SIGMA": 0.001,
+    "MOCK_POOR_TONES": [
+      0.95,
+      3.0,
+      22
+    ],
+    "MOCK_POOR_TONE_AMP": 0.012,
+    "MOCK_PULSE_DIR": [
+      0.33,
+      0.77,
+      0.53
+    ],
+    "MOCK_RAMP_SEC": 1.5,
+    "MOCK_SCENARIO": [
+      [
+        "measuring",
+        30.0
+      ],
+      [
+        "dim",
+        8.0
+      ],
+      [
+        "poor",
+        14.0
+      ],
+      [
+        "no_face",
+        4.0
+      ]
+    ],
+    "MOTION_THRESH": 0.1,
+    "NFFT": 2048,
+    "PLOT_REFRESH_MS": 100,
+    "POS_WIN_SEC": 1.6,
+    "PREVIEW_W": 480,
+    "READINGS_CSV": "readings.csv",
+    "RECORDINGS_DIR": "recordings",
+    "RECORD_FPS_PROBE_FRAMES": 90,
+    "RECORD_MJPG_QUALITY": 95,
+    "REF_DEVICES": [
+      "pulse count",
+      "smartwatch",
+      "pulse oximeter"
+    ],
+    "RELOCK_CHECK_SEC": 1.0,
+    "RELOCK_CONFIRM_CHECKS": 2,
+    "RELOCK_MOVE_FRAC": 0.08,
+    "RESULTS_DIR": "results",
+    "RGB_MAX": 255.0,
+    "ROI_FRACTIONS": {
+      "forehead": [
+        0.3,
+        0.1,
+        0.7,
+        0.25
+      ],
+      "left_cheek": [
+        0.15,
+        0.5,
+        0.35,
+        0.7
+      ],
+      "right_cheek": [
+        0.65,
+        0.5,
+        0.85,
+        0.7
+      ]
+    },
+    "ROI_LOCK_SEC": 2.0,
+    "ROI_SET": "cheeks",
+    "ROI_SETS": {
+      "all": [
+        "forehead",
+        "left_cheek",
+        "right_cheek"
+      ],
+      "cheeks": [
+        "left_cheek",
+        "right_cheek"
+      ]
+    },
+    "SEAM_MATCH_SEC": 2.0,
+    "SEAM_MIN_SEC": 0.5,
+    "SMOOTH_K": 5,
+    "SNR_FAIR_DB": 0.0,
+    "SNR_GOOD_DB": 2.0,
+    "SNR_HALF_WIDTH_HZ": 0.15,
+    "TRY_LOCK_CAMERA": false,
+    "UPDATE_SEC": 1.0,
+    "USE_SKIN_MASK": false,
+    "WINDOW_SEC": 15.0
+  },
+  "files": {
+    "means": "20261021_215101_means.csv",
+    "video": "20261021_215101.mkv"
+  },
+  "duration_sec": 63.734,
+  "frames": 1913,
+  "measured_fps": 29.999,
+  "method_at_stop": "CHROM",
+  "warnings": [],
+  "video_max_backlog_frames": 28,
+  "video": {
+    "codec": "FFV1 (lossless)",
+    "fps": 29.985315618194868
+  },
+  "video_removed": "20261021_215101.mkv was moved to the macOS Trash on 2026-10-21 (cleanup). The means CSV, meta and readings are what evaluation uses; offline replay of this clip is no longer possible."
+}

@@ -1,0 +1,7 @@
+clip,ref_bpm,device,confidence,method,windows,good_fair_windows,median_good_fair,error,pct_within_all,pct_within_good_fair
+20261021_185356,90,pulse count,lower (hand count),GREEN,49,25,83.20,-6.80,77.55,92.00
+20261021_185356,90,pulse count,lower (hand count),CHROM,49,16,83.02,-6.98,95.92,100.00
+20261021_185356,90,pulse count,lower (hand count),POS,49,15,83.33,-6.67,59.18,86.67
+20261021_215101,76.00,pulse count,lower (hand count),GREEN,54,54,84.86,8.86,77.78,77.78
+20261021_215101,76.00,pulse count,lower (hand count),CHROM,54,53,84.81,8.81,68.52,67.92
+20261021_215101,76.00,pulse count,lower (hand count),POS,54,54,84.68,8.68,72.22,72.22

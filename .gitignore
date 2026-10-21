@@ -1,0 +1,12 @@
+cat > .gitignore << 'EOF'
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.DS_Store
+debug/
+images/
+recordings/*
+!recordings/*.csv
+!recordings/*.json
+EOF

@@ -1,0 +1,18 @@
+{
+  "stamp": "20261021_185356",
+  "created": "2026-10-21T18:53:56",
+  "source": "webcam",
+  "retroactive": true,
+  "ref_bpm": 90,
+  "device": "pulse count",
+  "light_frame": false,
+  "notes": "Hand count over 60 s, 89-92, used 90. Phone torch hand-held in front. Recorded before P5, so this meta file was written afterwards from the session notes; the means CSV has no relock column.",
+  "settings": {
+    "ROI_SET": "cheeks",
+    "FREEZE_ROI": true
+  },
+  "files": {
+    "means": "20261021_185356_means.csv",
+    "video": null
+  }
+}
