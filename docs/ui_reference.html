@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PulseCam Monochrome</title>
+<script src="./vendor/react.js"></script>
+<script src="./vendor/react-dom.js"></script>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+*{box-sizing:border-box}
+button,input{font-family:inherit}
+.stage{position:relative;width:100%;min-height:900px;background:radial-gradient(900px 500px at 70% -10%,#1b1b1d 0,#0a0a0a 70%);color:#E8E8E8;font-family:'IBM Plex Sans',system-ui,sans-serif}
+.wrap{padding:24px;display:flex;flex-direction:column;gap:16px}
+.panel{position:relative;border-radius:12px;background:rgba(255,255,255,.035);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border:1px solid #26262a;box-shadow:inset 0 1px 0 rgba(255,255,255,.05)}
+.lbl{font:500 11px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#9A9A9A}
+.mono{font-family:'IBM Plex Mono',monospace}
+.top{height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 8px 0 20px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:600;font-size:15px}
+.tabs{display:flex;gap:2px;height:100%}
+.tab{height:100%;padding:0 18px;border:0;border-bottom:2px solid transparent;background:transparent;color:#8C8C8C;font-size:13px;font-weight:500;cursor:pointer;transition:color .15s,transform .18s cubic-bezier(.2,.8,.2,1)}
+.tab:hover{color:#E8E8E8;transform:scale(1.06)}
+.tab.on{color:#fff;border-bottom-color:#fff}
+.meta{display:flex;align-items:center;gap:18px;padding-right:14px;font-size:12px;color:#9A9A9A}
+.dot{width:7px;height:7px;border-radius:50%;background:#7FBF9E;display:inline-block;flex:none}
+.ic{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.btn{height:40px;padding:0 16px;border-radius:8px;border:1px solid #333336;background:#151516;color:#E8E8E8;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:background .15s,border-color .15s,transform .18s cubic-bezier(.2,.8,.2,1)}
+.btn:hover{background:#1f1f21;border-color:#4a4a4e;transform:scale(1.045)}
+.btn:active{transform:scale(.97)}
+.btn.primary{background:#EDEDED;color:#0A0A0A;border-color:#EDEDED}
+.btn.primary:hover{background:#fff}
+.btn:focus-visible,.tab:focus-visible,.fld:focus-visible{outline:2px solid #BDBDBD;outline-offset:2px}
+.fld{height:40px;width:120px;padding:0 14px;border-radius:8px;border:1px solid #333336;background:#0e0e0f;color:#E8E8E8;font-size:13px}
+.fld::placeholder{color:#7E7E82}
+.video{position:relative;height:410px;border-radius:8px;overflow:hidden;background:#0d0d0e}
+.vtag{position:absolute;font:500 11px/1 'IBM Plex Mono',monospace;color:#C8C8C8;background:rgba(0,0,0,.55);border:1px solid #2c2c2f;border-radius:6px;padding:7px 9px}
+.hero{height:300px;display:flex;align-items:stretch}
+.bpm{font:300 112px/1 'IBM Plex Sans',sans-serif;letter-spacing:-.04em;color:#fff}
+.state{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:#C8C8C8}
+.beat{position:relative;width:40px;height:40px;flex:none}
+.beat i{position:absolute;left:14px;top:14px;width:12px;height:12px;border-radius:50%;background:#EDEDED}
+.beat b{position:absolute;left:14px;top:14px;width:12px;height:12px;border-radius:50%;border:1.5px solid #EDEDED;animation:ring .833s ease-out infinite}
+@keyframes ring{from{transform:scale(1);opacity:.7}to{transform:scale(2.4);opacity:0}}
+.rows{display:flex;flex-direction:column;justify-content:center;gap:14px;padding:0 28px;border-left:1px solid #26262a;min-width:220px}
+.rows div{display:flex;justify-content:space-between;align-items:baseline;gap:20px}
+.rows b{font:500 14px/1 'IBM Plex Mono',monospace;color:#fff}
+.mcard{flex:1 1 0;min-width:0;height:96px;padding:14px 18px;display:flex;flex-direction:column;justify-content:space-between}
+.mcard{transition:transform .2s cubic-bezier(.2,.8,.2,1),border-color .2s}
+.mcard:hover{transform:scale(1.025);border-color:#4a4a4e}
+.mcard.on{border-color:#D6D6D6}
+.mcard.on:hover{border-color:#fff}
+.mnum{font:300 32px/1 'IBM Plex Sans',sans-serif;letter-spacing:-.02em}
+.scroll{animation:sx 5s linear infinite}
+@keyframes sx{to{transform:translateX(-400px)}}
+.plot{height:290px;padding:16px 18px;flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:10px}
+.sq{padding:16px 18px 18px;display:flex;flex-direction:column;gap:16px}
+.sqhead{display:flex;justify-content:space-between;align-items:baseline}
+.scale{position:relative;height:10px;border-radius:5px;overflow:hidden;display:flex}
+.z{height:100%}
+.z.p{width:33.33%;background:#7A4450}
+.z.f{width:16.67%;background:#8A7447}
+.z.g{width:50%;background:#477A60}
+.mark{position:absolute;top:-5px;width:2px;height:20px;background:#fff;border-radius:1px;left:67.5%}
+.ticks{position:relative;height:14px;font:400 11px/1 'IBM Plex Mono',monospace;color:#9A9A9A}
+.ticks span{position:absolute;transform:translateX(-50%)}
+.share{display:flex;height:8px;border-radius:4px;overflow:hidden;gap:2px}
+.legend{display:flex;gap:22px;font-size:12px;color:#C8C8C8}
+.legend span{display:inline-flex;align-items:center;gap:7px}
+.legend i{width:9px;height:9px;border-radius:2px;display:inline-block}
+.live{stroke-dasharray:1000;animation:draw 5s linear infinite}
+@keyframes draw{0%{stroke-dashoffset:1000;opacity:1}80%{stroke-dashoffset:0;opacity:1}92%{stroke-dashoffset:0;opacity:1}100%{stroke-dashoffset:0;opacity:0}}
+.liveDot{animation:dotfade 5s linear infinite;filter:drop-shadow(0 0 4px rgba(255,255,255,.7))}
+@keyframes dotfade{0%,80%{opacity:1}84%,100%{opacity:0}}
+@media (prefers-reduced-motion:reduce){*{animation:none !important;transition:none !important}}
+</style>
+</helmet>
+<div class="stage">
+  <div class="wrap">
+    <header class="panel top">
+      <div class="brand">
+        <svg width="24" height="24" viewBox="0 0 28 28" aria-hidden="true"><path d="M2 14h6l3-8 5 16 3-8h7" fill="none" stroke="#EDEDED" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+        <span>PulseCam</span>
+      </div>
+      <nav class="tabs" aria-label="Sections">
+        <button class="tab on">Live</button>
+        <button class="tab">Recordings</button>
+        <button class="tab">Evaluation</button>
+      </nav>
+      <div class="meta"><span style="display:inline-flex;align-items:center;gap:8px"><span class="dot"></span>Camera 30 fps</span><span class="mono">Not a medical device</span></div>
+    </header>
+
+    <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start">
+      <section style="flex:1 1 520px;max-width:600px;display:flex;flex-direction:column;gap:16px">
+        <div class="panel" style="padding:8px">
+          <div class="video">
+            <svg viewBox="0 0 560 406" width="100%" height="100%" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Live camera view with face box and two cheek regions">
+              <defs>
+                <radialGradient id="skin" cx="50%" cy="40%" r="65%"><stop offset="0" stop-color="#cfcfcf" stop-opacity=".30"></stop><stop offset="1" stop-color="#7a7a7a" stop-opacity=".10"></stop></radialGradient>
+                <linearGradient id="shoulder" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9a9a9a" stop-opacity=".25"></stop><stop offset="1" stop-color="#4a4a4a" stop-opacity=".04"></stop></linearGradient>
+              </defs>
+              <path d="M70 406c8-70 70-92 210-92s202 22 210 92z" fill="url(#shoulder)"></path>
+              <rect x="246" y="276" width="68" height="52" rx="22" fill="url(#skin)"></rect>
+              <ellipse cx="280" cy="185" rx="92" ry="112" fill="url(#skin)"></ellipse>
+              <path d="M232 168q18-9 34 0M294 168q18-9 34 0" stroke="rgba(235,235,235,.4)" stroke-width="2" fill="none" stroke-linecap="round"></path>
+              <path d="M268 190q12 22 24 0" stroke="rgba(235,235,235,.25)" stroke-width="1.6" fill="none" stroke-linecap="round"></path>
+              <path d="M254 238q26 14 52 0" stroke="rgba(235,235,235,.3)" stroke-width="2" fill="none" stroke-linecap="round"></path>
+              <rect x="170" y="62" width="220" height="248" rx="4" fill="none" stroke="rgba(255,255,255,.55)" stroke-width="1" stroke-dasharray="5 4"></rect>
+              <rect x="203" y="186" width="44" height="50" rx="3" fill="rgba(255,255,255,.08)" stroke="#F2F2F2" stroke-width="1.4"></rect>
+              <rect x="313" y="186" width="44" height="50" rx="3" fill="rgba(255,255,255,.08)" stroke="#F2F2F2" stroke-width="1.4"></rect>
+              <text x="203" y="178" fill="#CFCFCF" font-size="10" font-family="IBM Plex Mono, monospace" letter-spacing="1.5">ROI L</text>
+              <text x="313" y="178" fill="#CFCFCF" font-size="10" font-family="IBM Plex Mono, monospace" letter-spacing="1.5">ROI R</text>
+            </svg>
+            <span class="vtag" style="left:14px;top:14px">FACE LOCKED</span>
+            <span class="vtag" style="right:14px;bottom:14px">LIGHT 164 / FPS 30</span>
+          </div>
+        </div>
+
+        <div class="panel" style="padding:12px;display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+            <button class="btn primary"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true" style="fill:currentColor;stroke:none"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg>Stop</button>
+            <button class="btn">Method: CHROM<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></button>
+            <button class="btn">Source: Webcam<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></button>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+            <button class="btn"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"></circle><circle cx="12" cy="12" r="2.5" fill="currentColor"></circle></svg>Record</button>
+            <label for="ref" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Reference BPM</label>
+            <input id="ref" class="fld" placeholder="Ref BPM" inputmode="numeric">
+            <button class="btn"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h14M5 12h14M5 18h9"></path></svg>Log</button>
+            <span style="flex:1 1 0"></span>
+            <button class="btn" aria-label="Light frame"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6L7 7M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"></path></svg></button>
+            <button class="btn" aria-label="Fullscreen"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"></path></svg></button>
+          </div>
+        </div>
+
+        <div class="panel sq">
+          <div class="sqhead"><span class="lbl">Signal quality</span><span class="state"><span class="dot"></span>Good</span></div>
+          <div>
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px"><span style="font-size:12px;color:#9A9A9A">SNR now</span><b class="mono" style="font-size:15px;font-weight:500;color:#fff">+4.1 dB</b></div>
+            <div class="scale" role="img" aria-label="SNR of +4.1 dB, in the good range. Fair starts at 0 dB, good at +2 dB.">
+              <div class="z p"></div><div class="z f"></div><div class="z g"></div>
+            </div>
+            <div style="position:relative;height:0"><div class="mark" style="top:-15px" aria-hidden="true"></div></div>
+            <div class="ticks" style="margin-top:8px"><span style="left:0%;transform:none">-4</span><span style="left:33.33%">0 fair</span><span style="left:50%">+2 good</span><span style="left:100%;transform:translateX(-100%)">+8 dB</span></div>
+          </div>
+          <div>
+            <div style="font-size:12px;color:#9A9A9A;margin-bottom:8px">Last 60 s of windows</div>
+            <div class="share" role="img" aria-label="46 percent good, 38 percent fair, 16 percent poor"><div style="width:46%;background:#477A60"></div><div style="width:38%;background:#8A7447"></div><div style="width:16%;background:#7A4450"></div></div>
+            <div class="legend" style="margin-top:10px"><span><i style="background:#477A60"></i>Good 46%</span><span><i style="background:#8A7447"></i>Fair 38%</span><span><i style="background:#7A4450"></i>Poor 16%</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section style="flex:999 1 560px;min-width:0;display:flex;flex-direction:column;gap:16px">
+        <div class="panel hero">
+          <div style="flex:1 1 0;min-width:0;padding:22px 0 22px 30px;display:flex;flex-direction:column;justify-content:space-between">
+            <div style="display:flex;align-items:center;gap:14px"><span class="lbl">Heart rate</span><span class="state"><span class="dot"></span>Measuring</span></div>
+            <div style="display:flex;align-items:flex-end;gap:14px"><span class="bpm">72</span><span class="lbl" style="padding-bottom:24px;font-size:13px">BPM</span><span class="beat" style="margin-bottom:20px" aria-hidden="true"><b></b><i></i></span></div>
+            <div style="padding-right:22px">
+              <div style="display:flex;justify-content:space-between;margin-bottom:6px"><span class="lbl">Live pulse</span><span class="mono" style="font-size:11px;color:#9A9A9A">1.2 Hz</span></div>
+              <svg viewBox="0 0 400 70" preserveAspectRatio="none" width="100%" height="54" style="display:block;overflow:visible" role="img" aria-label="Live pulse trace, one beat roughly every 0.83 seconds"><path class="live" d="{{pulsePath}}" pathLength="1000" fill="none" stroke="#EDEDED" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"></path><circle class="liveDot" r="3.5" fill="#fff"><animateMotion dur="5s" repeatCount="indefinite" path="{{pulsePath}}" keyPoints="0;1;1" keyTimes="0;0.8;1" calcMode="linear"></animateMotion></circle></svg>
+            </div>
+          </div>
+          <div class="rows">
+            <div><span class="lbl">Method</span><b>CHROM</b></div>
+            <div><span class="lbl">SNR</span><b>+4.1 dB</b></div>
+            <div style="flex-wrap:wrap;row-gap:8px"><span class="lbl">Light</span><b>164 / 255</b><span role="img" aria-label="Light level 164 out of 255. The low-light threshold is 120." style="flex-basis:100%;position:relative;display:block;height:4px;border-radius:2px;background:#2a2a2d"><span style="position:absolute;left:0;top:0;bottom:0;width:64.3%;background:#BDBDBD;border-radius:2px"></span><span style="position:absolute;left:47.1%;top:-3px;bottom:-3px;width:1px;background:#8C8C8C"></span></span></div>
+            <div><span class="lbl">Window</span><b>15 s</b></div>
+            <div><span class="lbl">Range</span><b>54-180</b></div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:16px">
+          <div class="panel mcard"><div style="display:flex;justify-content:space-between;align-items:center"><span class="lbl">Green</span><span class="dot" style="background:#C9A85F"></span></div><span class="mnum">71.8</span></div>
+          <div class="panel mcard on"><div style="display:flex;justify-content:space-between;align-items:center"><span class="lbl" style="color:#fff">Chrom, active</span><span class="dot"></span></div><span class="mnum">72.2</span></div>
+          <div class="panel mcard"><div style="display:flex;justify-content:space-between;align-items:center"><span class="lbl">Pos</span><span class="dot"></span></div><span class="mnum">72.3</span></div>
+        </div>
+
+        <div style="display:flex;flex-wrap:wrap;gap:16px">
+          <div class="panel plot" style="flex:1 1 300px">
+            <div style="display:flex;justify-content:space-between"><span class="lbl">Filtered pulse, last 15 s</span><span class="mono" style="font-size:11px;color:#9A9A9A">0.9-3.0 Hz</span></div>
+            <svg viewBox="0 0 400 130" preserveAspectRatio="none" width="100%" height="100%" style="flex:1 1 0;min-height:0;overflow:hidden" role="img" aria-label="Scrolling filtered pulse waveform">
+              <line x1="0" y1="65" x2="400" y2="65" stroke="rgba(255,255,255,.08)" stroke-dasharray="3 6"></line>
+              <g class="scroll"><path d="{{wavePath}}" fill="none" stroke="#EDEDED" stroke-width="1.7" stroke-linejoin="round" vector-effect="non-scaling-stroke"></path></g>
+            </svg>
+          </div>
+          <div class="panel plot" style="flex:1 1 300px">
+            <div style="display:flex;justify-content:space-between"><span class="lbl">Spectrum</span><span class="mono" data-tip="" style="font-size:11px;color:#E8E8E8">Peak 72 BPM</span></div>
+            <svg data-spec="" viewBox="0 0 400 130" preserveAspectRatio="none" width="100%" height="100%" style="flex:1 1 0;min-height:0;cursor:crosshair" role="img" aria-label="Frequency spectrum with the peak at 72 beats per minute. Move the cursor to read the frequency.">
+              <defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".22"></stop><stop offset="1" stop-color="#fff" stop-opacity="0"></stop></linearGradient></defs>
+              <path d="{{specArea}}" fill="url(#sg)"></path>
+              <path d="{{specLine}}" fill="none" stroke="#DADADA" stroke-width="1.5" vector-effect="non-scaling-stroke"></path>
+              <line x1="57" y1="4" x2="57" y2="130" stroke="#9A9A9A" stroke-width="1" stroke-dasharray="3 4" vector-effect="non-scaling-stroke"></line>
+              <line data-cursor="" x1="0" y1="0" x2="0" y2="130" stroke="#fff" stroke-width="1" vector-effect="non-scaling-stroke" style="opacity:0"></line>
+            </svg>
+            <div class="mono" style="display:flex;justify-content:space-between;font-size:11px;color:#9A9A9A"><span>54</span><span>90</span><span>120</span><span>150</span><span>180 BPM</span></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  componentDidMount() {
+    const spec = document.querySelector('[data-spec]');
+    const cur = document.querySelector('[data-cursor]');
+    const tip = document.querySelector('[data-tip]');
+    if (spec && cur && tip) {
+      spec.addEventListener('mousemove', (e) => {
+        const r = spec.getBoundingClientRect();
+        const f = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+        cur.setAttribute('x1', f * 400); cur.setAttribute('x2', f * 400);
+        cur.style.opacity = 0.9;
+        tip.textContent = Math.round(54 + f * 126) + ' BPM / ' + ((54 + f * 126) / 60).toFixed(2) + ' Hz';
+      });
+      spec.addEventListener('mouseleave', () => { cur.style.opacity = 0; tip.textContent = 'Peak 72 BPM'; });
+    }
+  }
+  renderVals() {
+    const g = (u, c, s) => Math.exp(-Math.pow((u - c) / s, 2));
+    let wp = '';
+    for (let x = 0; x <= 800; x += 2) {
+      const u = (x % (400 / 6)) / (400 / 6);
+      const y = 88 - 46 * g(u, 0.22, 0.07) - 15 * g(u, 0.5, 0.1);
+      wp += (x ? 'L' : 'M') + x + ' ' + y.toFixed(1) + ' ';
+    }
+    const bpmX = (b) => ((b - 54) / 126) * 400;
+    let line = '';
+    for (let b = 54; b <= 180; b += 1) {
+      const n = 4 + 3 * Math.abs(Math.sin(b * 1.7)) + 2 * Math.abs(Math.sin(b * 0.37));
+      const v = n + 82 * g(b, 72, 3.4) + 20 * g(b, 144, 4);
+      line += (b === 54 ? 'M' : 'L') + bpmX(b).toFixed(1) + ' ' + (126 - v).toFixed(1) + ' ';
+    }
+    let pp = '';
+    for (let x = 0; x <= 400; x += 1) {
+      const u = (x % (400 / 6)) / (400 / 6);
+      const y = 56 - 40 * g(u, 0.22, 0.07) - 13 * g(u, 0.5, 0.1);
+      pp += (x ? 'L' : 'M') + x + ' ' + y.toFixed(1) + ' ';
+    }
+    return { wavePath: wp, pulsePath: pp, specLine: line, specArea: line + 'L400 130 L0 130 Z' };
+  }
+}
+</script>
+</body>
+</html>

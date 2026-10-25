@@ -11,8 +11,8 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QDoubleValidator, QKeySequence, QShortcut
-from PySide6.QtWidgets import (QComboBox, QFileDialog, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QPushButton,
-                               QVBoxLayout, QWidget)
+from PySide6.QtGui import QGuiApplication
+from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QVBoxLayout, QWidget
 
 import config
 import recorder
@@ -21,11 +21,18 @@ from capture import MockSource
 from estimator import Estimator
 from models import FrameSample
 from ui import theme
-from ui.widgets import BpmPanel, Card, PulsePlot, SpectrumPlot, VideoView, brightness, build_display
+from ui.animated import AnimButton, ComboButton
+from ui.panels import Dashboard, FaceLock, Panel, QualityPanel, QualityShare, TopBar
+from ui.widgets import (BpmPanel, MethodCards, PlotCard, PulsePlot, SpectrumPlot, TickRow, VideoView, brightness,
+                        build_display)
 from worker import CaptureWorker
 
 SOURCES = ("mock", "webcam", "file")
 STATUS_CLEAR_MS = 8000
+STATUS_H = 16                   # fixed height of the status line, so a message appearing does not move the layout
+REF_FIELD_W = 112                # the reference is 120; 8 px less lets the controls fit the 600 px column
+PANEL_PAD = 12                  # visible padding inside the controls panel
+CONTROL_GAP = 8 - 2 * theme.ANIM_MARGIN        # layout spacing that leaves 8 px between drawn controls
 VIDEO_FILTER = "Video (*.mkv *.avi *.mp4 *.mov *.m4v);;All files (*)"
 
 
@@ -54,8 +61,8 @@ class MainWindow(QMainWindow):
         if source not in SOURCES:
             raise ValueError(f"source must be one of {SOURCES}")
         self.setWindowTitle("PulseCam")
-        self.resize(1280, 800)
-        self.setMinimumSize(960, 600)
+        self.setMinimumSize(*theme.MIN_WINDOW)
+        self.resize(*self._initial_size())
         self.steady = steady
         self.estimator = Estimator(config.DEFAULT_METHOD)
 
@@ -70,6 +77,8 @@ class MainWindow(QMainWindow):
         self._warm_start = 0.0
         self._face_prev = False
         self._bright: deque[tuple[float, float]] = deque()
+        self.share = QualityShare()                         # good / fair / poor over the last 60 s (UI layer only)
+        self.lock = FaceLock()                              # what the video tag may claim, from the real flags
         self._file_path: str | None = None
         self._stopped_hint = "Press Start"
         self._recorder: recorder.Recorder | None = None
@@ -84,95 +93,160 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------ construction
 
+    @staticmethod
+    def _initial_size() -> tuple[int, int]:
+        """The design size, shrunk to fit the screen but never below the minimum."""
+        screen = QGuiApplication.primaryScreen()
+        w, h = theme.DESIGN_WINDOW
+        if screen is not None:
+            avail = screen.availableGeometry()
+            w, h = min(w, avail.width()), min(h, avail.height())
+        return max(w, theme.MIN_WINDOW[0]), max(h, theme.MIN_WINDOW[1])
+
     def _build_ui(self, source: str) -> None:
+        self.topbar = TopBar()
         self.video = VideoView()
         self.panel = BpmPanel()
+        self.quality_panel = QualityPanel()
         self.pulse_plot = PulsePlot()
         self.spectrum_plot = SpectrumPlot()
 
-        self.start_button = QPushButton("Start")
-        self.start_button.setObjectName("primary")
+        self.start_button = AnimButton("Start", glyph="run", primary=True)
         self.start_button.clicked.connect(self.toggle_running)
-        self.method_combo = QComboBox()
+        self.method_combo = ComboButton("Method")
+        self.method_combo.setAccessibleName("Method")
         self.method_combo.addItems(list(signal_proc.METHODS))
         self.method_combo.setCurrentText(self.estimator.method)
         self.method_combo.currentTextChanged.connect(self._on_method)
-        self.source_combo = QComboBox()
+        self.source_combo = ComboButton("Source")
+        self.source_combo.setAccessibleName("Source")
         self.source_combo.addItems(["Mock", "Webcam", "File..."])
         self.source_combo.setCurrentIndex(SOURCES.index(source))
         self._source_index = self.source_combo.currentIndex()
         self.source_combo.currentIndexChanged.connect(self._on_source_changed)
-        self.light_button = QPushButton("Light frame")
-        self.light_button.setCheckable(True)
+        self.light_button = AnimButton("", glyph="light", checkable=True)
+        self.light_button.setToolTip("Light frame (L)")
+        self.light_button.setAccessibleName("Light frame")
         self.light_button.setChecked(config.LIGHT_FRAME_DEFAULT)
-        self.light_button.toggled.connect(lambda on: self.light.set_on(on))
-        self.full_button = QPushButton("Fullscreen")
-        self.full_button.setCheckable(True)
+        self.light_button.toggled.connect(self._set_light_frame)
+        self.full_button = AnimButton("", glyph="fullscreen", checkable=True)
+        self.full_button.setToolTip("Fullscreen (F)")
+        self.full_button.setAccessibleName("Fullscreen")
         self.full_button.toggled.connect(self._set_fullscreen)
 
-        self.record_button = QPushButton("Record")
-        self.record_button.setCheckable(True)
+        self.record_button = AnimButton("Record", glyph="record", checkable=True)
         self.record_button.toggled.connect(self._on_record_toggled)
         self.ref_edit = QLineEdit()
         self.ref_edit.setPlaceholderText("Ref BPM")
-        self.ref_edit.setFixedWidth(90)
+        self.ref_edit.setAccessibleName("Reference BPM")
+        self.ref_edit.setFixedSize(REF_FIELD_W, theme.CONTROL_H)
         self.ref_edit.setValidator(QDoubleValidator(20.0, 250.0, 1))
         self.ref_edit.editingFinished.connect(self._on_ref_changed)
-        self.device_combo = QComboBox()
+        self.device_combo = ComboButton("")
+        self.device_combo.setAccessibleName("Reference device")
         self.device_combo.addItems(list(config.REF_DEVICES))
         self.device_combo.currentTextChanged.connect(lambda _: self._on_ref_changed())
-        self.log_button = QPushButton("Log")
+        self.log_button = AnimButton("Log", glyph="log")
         self.log_button.setToolTip("Append the current reading and the reference BPM to results/readings.csv")
         self.log_button.clicked.connect(self._log_reading)
         self.status = QLabel("")
         self.status.setObjectName("stat")
+        self.status.setFont(theme.font("mono", theme.SMALL_FONT_PX + 1, 400))
+        self.status.setFixedHeight(STATUS_H)
 
-        controls = QHBoxLayout()
-        controls.setSpacing(8)
-        controls.addWidget(self.start_button)
-        for text, combo in (("Method", self.method_combo), ("Source", self.source_combo)):
-            label = QLabel(text)
-            label.setObjectName("stat")
-            controls.addWidget(label)
-            controls.addWidget(combo)
-        controls.addStretch(1)
-        controls.addWidget(self.light_button)
-        controls.addWidget(self.full_button)
-
+        m = theme.ANIM_MARGIN
+        first = QHBoxLayout()
+        first.setSpacing(CONTROL_GAP)
+        for w in (self.start_button, self.method_combo, self.source_combo):
+            first.addWidget(w)
+        first.addStretch(1)
+        field = QWidget()                                   # the line edit has no scale margin: pad it to line up
+        field_row = QHBoxLayout(field)
+        field_row.setContentsMargins(m, m, m, m)
+        field_row.addWidget(self.ref_edit)
         second = QHBoxLayout()
-        second.setSpacing(8)
+        second.setSpacing(CONTROL_GAP)
         second.addWidget(self.record_button)
-        second.addWidget(self.ref_edit)
+        second.addWidget(field)
         second.addWidget(self.device_combo)
         second.addWidget(self.log_button)
-        second.addWidget(self.status, 1)
+        second.addStretch(1)
+        second.addWidget(self.light_button)
+        second.addWidget(self.full_button)
 
-        left = QVBoxLayout()
-        left.setSpacing(theme.SPACING)
-        left.addWidget(self.video, 1)
-        left.addLayout(controls)
-        left.addLayout(second)
+        controls = Panel()
+        box = QVBoxLayout(controls)
+        pad = PANEL_PAD - theme.ANIM_MARGIN                 # the controls bring their own margin
+        box.setContentsMargins(pad, pad, pad, pad)
+        box.setSpacing(0)
+        box.addLayout(first)
+        box.addLayout(second)
+        box.addWidget(self.status)
 
-        right = QVBoxLayout()
-        right.setSpacing(theme.SPACING)
-        right.addWidget(self.panel)
-        right.addWidget(Card(f"Filtered pulse, last {config.WINDOW_SEC:.0f} s (seconds)", self.pulse_plot), 1)
-        right.addWidget(Card("Spectrum: Hz (bottom), BPM (top), peak marked", self.spectrum_plot), 1)
+        video_panel = Panel()
+        vbox = QVBoxLayout(video_panel)
+        vbox.setContentsMargins(8, 8, 8, 8)
+        vbox.addWidget(self.video)
 
-        dashboard = QWidget()
+        left = QWidget()
+        left.setMaximumWidth(theme.LEFT_MAX_W)
+        left.setMinimumWidth(theme.LEFT_MIN_W)             # the controls row needs this much
+        left_col = QVBoxLayout(left)
+        left_col.setContentsMargins(0, 0, 0, 0)
+        left_col.setSpacing(theme.SPACING)
+        left_col.addWidget(video_panel, 1)
+        left_col.addWidget(controls)
+        left_col.addWidget(self.quality_panel)
+
+        # Right column: hero, cards and plots are flexible in height (hero 300, cards 96, plots 290 at the reference
+        # size, compressing to their minimums at 720 px). The cards carry a hover margin of their own, so the column
+        # reaches ANIM_MARGIN px past the panels on each side and the vertical gaps are shortened by the same amount.
+        m = theme.ANIM_MARGIN
+        self.cards = MethodCards()
+        self.pulse_card = PlotCard(f"Filtered pulse, last {config.WINDOW_SEC:.0f} s",
+                                   f"{config.BAND_LO:.1f}-{config.BAND_HI:.1f} Hz", self.pulse_plot)
+        self.spectrum_card = PlotCard("Spectrum", "--", self.spectrum_plot, right_color=theme.TEXT, footer=TickRow())
+        self.spectrum_plot.readout.connect(self.spectrum_card.right.setText)
+        hero_row = QHBoxLayout()
+        hero_row.setContentsMargins(m, 0, m, 0)
+        hero_row.addWidget(self.panel)
+        plots_row = QHBoxLayout()
+        plots_row.setContentsMargins(m, 0, m, 0)
+        plots_row.setSpacing(theme.SPACING)
+        plots_row.addWidget(self.pulse_card, 1)
+        plots_row.addWidget(self.spectrum_card, 1)
+        right_col = QWidget()
+        right = QVBoxLayout(right_col)
+        right.setContentsMargins(0, 0, 0, 0)
+        right.setSpacing(0)
+        right.addLayout(hero_row, theme.HERO_H)
+        right.addSpacing(theme.SPACING - m)
+        right.addWidget(self.cards, theme.CARDS_H + 2 * m)
+        right.addSpacing(theme.SPACING - m)
+        right.addLayout(plots_row, theme.PLOTS_H)
+        right.addStretch(1)                                 # a window taller than the reference leaves the extra at the bottom
+
+        dashboard = Dashboard()
         dashboard.setObjectName("dashboard")
-        dashboard.setAttribute(Qt.WA_StyledBackground, True)
-        row = QHBoxLayout(dashboard)
-        row.setContentsMargins(theme.SPACING, theme.SPACING, theme.SPACING, theme.SPACING)
-        row.setSpacing(theme.SPACING)
-        row.addLayout(left, 5)
-        row.addLayout(right, 4)
+        column = QVBoxLayout(dashboard)
+        column.setContentsMargins(theme.MARGIN, theme.MARGIN, theme.MARGIN - m, theme.MARGIN)
+        column.setSpacing(theme.SPACING)
+        top_row = QHBoxLayout()
+        top_row.setContentsMargins(0, 0, m, 0)
+        top_row.addWidget(self.topbar)
+        column.addLayout(top_row)
+        row = QHBoxLayout()
+        row.setSpacing(theme.SPACING - m)
+        row.addWidget(left, 5)
+        row.addWidget(right_col, 4)
+        column.addLayout(row, 1)
 
         self.light = LightFrame(dashboard)
         self.setCentralWidget(self.light)
 
     def _build_timers(self) -> None:
         self._frame_timer = QTimer(self)                    # drives MockSource only
+        self._frame_timer.setTimerType(Qt.PreciseTimer)     # the default coarse timer gave about 21 fps on Windows
         self._frame_timer.setInterval(round(1000 / config.MOCK_HZ))
         self._frame_timer.timeout.connect(self._tick_mock)
         self._estimate_timer = QTimer(self)
@@ -219,6 +293,8 @@ class MainWindow(QMainWindow):
         self.estimator.reset()
         self._result, self._analyses = None, {}
         self._bright.clear()
+        self.share.clear()
+        self.lock.reset()
         self._face_prev = False
         self._stopped_hint = "Press Start"
         self._running = True
@@ -261,6 +337,8 @@ class MainWindow(QMainWindow):
     def stop(self) -> None:
         self._halt()
         self._result, self._analyses = None, {}
+        self.share.clear()
+        self.lock.reset()
         self.video.clear_frame()
         self._plots_dirty = True
         self._update_controls()
@@ -278,11 +356,29 @@ class MainWindow(QMainWindow):
         self._update_controls()
         self._refresh()
 
+    def _set_light_frame(self, on: bool) -> None:
+        self.light.set_on(on)
+        self._fit_to_content()
+
+    def _fit_to_content(self) -> None:
+        """The dashboard keeps its minimum size while the white frame is on: the window's minimum grows by the frame's
+        margins (never beyond the screen) and the window grows with it, so the panels are not squeezed."""
+        extra = 2 * config.LIGHT_FRAME_PX if self.light.on else 0
+        w, h = theme.MIN_WINDOW[0] + extra, theme.MIN_WINDOW[1] + extra
+        screen = QGuiApplication.primaryScreen()
+        if screen is not None:
+            avail = screen.availableGeometry()
+            w, h = min(w, max(avail.width(), theme.MIN_WINDOW[0])), min(h, max(avail.height(), theme.MIN_WINDOW[1]))
+        self.setMinimumSize(w, h)
+        if not self.isFullScreen() and not self.isMaximized():
+            self.resize(max(self.width(), w), max(self.height(), h))
+
     def _set_fullscreen(self, on: bool) -> None:
         self.showFullScreen() if on else self.showNormal()
 
     def _on_method(self, name: str) -> None:
         self.estimator.set_method(name)
+        self.share.clear()                                  # a mix of methods would mislead (as with the estimator's history)
         if self._running:
             self._estimate()
         self._refresh()
@@ -368,6 +464,7 @@ class MainWindow(QMainWindow):
         """Every frame: show the preview and append to the estimator (cheap)."""
         self.video.set_frame(s.preview)
         self.estimator.push(s.t, s.rgb, s.face_found, s.relock)
+        self.lock.update(s.face_found, s.relock)
         self._latest_t = s.t
         # Warm-up clock: starts when the face appears (a re-lock keeps the buffer, so it does not restart it).
         if s.face_found and not self._face_prev:
@@ -383,6 +480,7 @@ class MainWindow(QMainWindow):
         """Every UPDATE_SEC: one estimate, plus every method on the same buffer for the side-by-side row."""
         self._result = self.estimator.estimate()
         self._analyses = self.estimator.analyze_all()
+        self.share.add(self._result.t, self._result.quality)
         self._plots_dirty = True
 
     def _brightness_level(self) -> float | None:
@@ -393,14 +491,20 @@ class MainWindow(QMainWindow):
     def _refresh(self) -> None:
         """At most every PLOT_REFRESH_MS: text always, plots only when a new result has arrived."""
         level = self._brightness_level()
+        self.topbar.set_camera(self.source_kind, self._result.fps if self._result is not None else None, self._running)
         warm_x = max(0, int(self._latest_t - self._warm_start))
-        self.panel.update_display(build_display(
+        d = build_display(
             self._running, self._result, self._analyses, self.estimator.method, warm_x,
             low_light=level is not None and level < config.LOW_LIGHT_LEVEL, brightness_level=level,
-            stopped_hint=self._stopped_hint))
+            stopped_hint=self._stopped_hint)
+        self.panel.update_display(d)
+        self.cards.update_display(d)
+        self.quality_panel.update_display(d.quality, d.snr_text, d.snr_db, self.share.shares())
+        self.video.set_tags(self.lock.text, f"LIGHT {d.brightness_text} / FPS {d.fps_text}")
         if self._recorder is not None:
             self._say(f"Recording {self._recorder.stamp}: {time.perf_counter() - self._rec_started:.0f} s")
         if self._plots_dirty:
+            self.panel.set_result(self._result)
             self.pulse_plot.set_result(self._result)
             self.spectrum_plot.set_result(self._result)
             self._plots_dirty = False

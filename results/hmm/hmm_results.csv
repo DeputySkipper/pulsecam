@@ -1,0 +1,181 @@
+section,sigma,clip,method,source,metric,value,n
+main,1.5,20261021_230706,GREEN,"App bpm_smooth, good/fair windows",mae,4.37,19
+main,1.5,20261021_230706,GREEN,"App bpm_smooth, good/fair windows",coverage_pct,36.1,97
+main,1.5,20261021_230706,GREEN,"Raw peak, good/fair windows (the evaluate.py baseline)",mae,5.25,19
+main,1.5,20261021_230706,GREEN,"Raw peak, good/fair windows (the evaluate.py baseline)",coverage_pct,48.5,97
+main,1.5,20261021_230706,GREEN,"Raw peak, all windows",mae,5.44,19
+main,1.5,20261021_230706,GREEN,"Raw peak, all windows",coverage_pct,100.0,97
+main,1.5,20261021_230706,GREEN,"HMM forward filter, all windows",mae,2.68,19
+main,1.5,20261021_230706,GREEN,"HMM forward filter, all windows",coverage_pct,100.0,97
+main,1.5,20261021_230706,GREEN,"HMM Viterbi, all windows",mae,2.68,19
+main,1.5,20261021_230706,GREEN,"HMM Viterbi, all windows",coverage_pct,100.0,97
+confidence,1.5,20261021_230706,GREEN,posterior -> forward within 10,auc,0.78,97
+confidence,1.5,20261021_230706,GREEN,SNR -> raw peak within 10,auc,0.70,97
+confidence,1.5,20261021_230706,GREEN,SNR -> forward within 10,auc,0.69,97
+confidence,1.5,20261021_230706,GREEN,posterior -> raw peak within 10,auc,0.73,97
+main,1.5,20261021_230706,CHROM,"App bpm_smooth, good/fair windows",mae,2.15,19
+main,1.5,20261021_230706,CHROM,"App bpm_smooth, good/fair windows",coverage_pct,51.5,97
+main,1.5,20261021_230706,CHROM,"Raw peak, good/fair windows (the evaluate.py baseline)",mae,2.33,19
+main,1.5,20261021_230706,CHROM,"Raw peak, good/fair windows (the evaluate.py baseline)",coverage_pct,58.8,97
+main,1.5,20261021_230706,CHROM,"Raw peak, all windows",mae,2.94,19
+main,1.5,20261021_230706,CHROM,"Raw peak, all windows",coverage_pct,100.0,97
+main,1.5,20261021_230706,CHROM,"HMM forward filter, all windows",mae,2.53,19
+main,1.5,20261021_230706,CHROM,"HMM forward filter, all windows",coverage_pct,100.0,97
+main,1.5,20261021_230706,CHROM,"HMM Viterbi, all windows",mae,2.11,19
+main,1.5,20261021_230706,CHROM,"HMM Viterbi, all windows",coverage_pct,100.0,97
+confidence,1.5,20261021_230706,CHROM,posterior -> forward within 10,auc,0.85,97
+confidence,1.5,20261021_230706,CHROM,SNR -> raw peak within 10,auc,0.91,97
+confidence,1.5,20261021_230706,CHROM,SNR -> forward within 10,auc,0.77,97
+confidence,1.5,20261021_230706,CHROM,posterior -> raw peak within 10,auc,0.86,97
+main,1.5,20261021_230706,POS,"App bpm_smooth, good/fair windows",mae,2.22,19
+main,1.5,20261021_230706,POS,"App bpm_smooth, good/fair windows",coverage_pct,54.6,97
+main,1.5,20261021_230706,POS,"Raw peak, good/fair windows (the evaluate.py baseline)",mae,2.35,19
+main,1.5,20261021_230706,POS,"Raw peak, good/fair windows (the evaluate.py baseline)",coverage_pct,62.9,97
+main,1.5,20261021_230706,POS,"Raw peak, all windows",mae,4.10,19
+main,1.5,20261021_230706,POS,"Raw peak, all windows",coverage_pct,100.0,97
+main,1.5,20261021_230706,POS,"HMM forward filter, all windows",mae,3.05,19
+main,1.5,20261021_230706,POS,"HMM forward filter, all windows",coverage_pct,100.0,97
+main,1.5,20261021_230706,POS,"HMM Viterbi, all windows",mae,2.11,19
+main,1.5,20261021_230706,POS,"HMM Viterbi, all windows",coverage_pct,100.0,97
+confidence,1.5,20261021_230706,POS,posterior -> forward within 10,auc,0.81,97
+confidence,1.5,20261021_230706,POS,SNR -> raw peak within 10,auc,0.89,97
+confidence,1.5,20261021_230706,POS,SNR -> forward within 10,auc,0.82,97
+confidence,1.5,20261021_230706,POS,posterior -> raw peak within 10,auc,0.84,97
+main,3.0,20261021_230706,GREEN,"App bpm_smooth, good/fair windows",mae,4.37,19
+main,3.0,20261021_230706,GREEN,"App bpm_smooth, good/fair windows",coverage_pct,36.1,97
+main,3.0,20261021_230706,GREEN,"Raw peak, good/fair windows (the evaluate.py baseline)",mae,5.25,19
+main,3.0,20261021_230706,GREEN,"Raw peak, good/fair windows (the evaluate.py baseline)",coverage_pct,48.5,97
+main,3.0,20261021_230706,GREEN,"Raw peak, all windows",mae,5.44,19
+main,3.0,20261021_230706,GREEN,"Raw peak, all windows",coverage_pct,100.0,97
+main,3.0,20261021_230706,GREEN,"HMM forward filter, all windows",mae,3.79,19
+main,3.0,20261021_230706,GREEN,"HMM forward filter, all windows",coverage_pct,100.0,97
+main,3.0,20261021_230706,GREEN,"HMM Viterbi, all windows",mae,3.00,19
+main,3.0,20261021_230706,GREEN,"HMM Viterbi, all windows",coverage_pct,100.0,97
+confidence,3.0,20261021_230706,GREEN,posterior -> forward within 10,auc,0.78,97
+confidence,3.0,20261021_230706,GREEN,SNR -> raw peak within 10,auc,0.70,97
+confidence,3.0,20261021_230706,GREEN,SNR -> forward within 10,auc,0.70,97
+confidence,3.0,20261021_230706,GREEN,posterior -> raw peak within 10,auc,0.75,97
+main,3.0,20261021_230706,CHROM,"App bpm_smooth, good/fair windows",mae,2.15,19
+main,3.0,20261021_230706,CHROM,"App bpm_smooth, good/fair windows",coverage_pct,51.5,97
+main,3.0,20261021_230706,CHROM,"Raw peak, good/fair windows (the evaluate.py baseline)",mae,2.33,19
+main,3.0,20261021_230706,CHROM,"Raw peak, good/fair windows (the evaluate.py baseline)",coverage_pct,58.8,97
+main,3.0,20261021_230706,CHROM,"Raw peak, all windows",mae,2.94,19
+main,3.0,20261021_230706,CHROM,"Raw peak, all windows",coverage_pct,100.0,97
+main,3.0,20261021_230706,CHROM,"HMM forward filter, all windows",mae,2.68,19
+main,3.0,20261021_230706,CHROM,"HMM forward filter, all windows",coverage_pct,100.0,97
+main,3.0,20261021_230706,CHROM,"HMM Viterbi, all windows",mae,3.63,19
+main,3.0,20261021_230706,CHROM,"HMM Viterbi, all windows",coverage_pct,100.0,97
+confidence,3.0,20261021_230706,CHROM,posterior -> forward within 10,auc,0.85,97
+confidence,3.0,20261021_230706,CHROM,SNR -> raw peak within 10,auc,0.91,97
+confidence,3.0,20261021_230706,CHROM,SNR -> forward within 10,auc,0.81,97
+confidence,3.0,20261021_230706,CHROM,posterior -> raw peak within 10,auc,0.87,97
+main,3.0,20261021_230706,POS,"App bpm_smooth, good/fair windows",mae,2.22,19
+main,3.0,20261021_230706,POS,"App bpm_smooth, good/fair windows",coverage_pct,54.6,97
+main,3.0,20261021_230706,POS,"Raw peak, good/fair windows (the evaluate.py baseline)",mae,2.35,19
+main,3.0,20261021_230706,POS,"Raw peak, good/fair windows (the evaluate.py baseline)",coverage_pct,62.9,97
+main,3.0,20261021_230706,POS,"Raw peak, all windows",mae,4.10,19
+main,3.0,20261021_230706,POS,"Raw peak, all windows",coverage_pct,100.0,97
+main,3.0,20261021_230706,POS,"HMM forward filter, all windows",mae,4.21,19
+main,3.0,20261021_230706,POS,"HMM forward filter, all windows",coverage_pct,100.0,97
+main,3.0,20261021_230706,POS,"HMM Viterbi, all windows",mae,2.11,19
+main,3.0,20261021_230706,POS,"HMM Viterbi, all windows",coverage_pct,100.0,97
+confidence,3.0,20261021_230706,POS,posterior -> forward within 10,auc,0.82,97
+confidence,3.0,20261021_230706,POS,SNR -> raw peak within 10,auc,0.89,97
+confidence,3.0,20261021_230706,POS,SNR -> forward within 10,auc,0.86,97
+confidence,3.0,20261021_230706,POS,posterior -> raw peak within 10,auc,0.85,97
+main,6.0,20261021_230706,GREEN,"App bpm_smooth, good/fair windows",mae,4.37,19
+main,6.0,20261021_230706,GREEN,"App bpm_smooth, good/fair windows",coverage_pct,36.1,97
+main,6.0,20261021_230706,GREEN,"Raw peak, good/fair windows (the evaluate.py baseline)",mae,5.25,19
+main,6.0,20261021_230706,GREEN,"Raw peak, good/fair windows (the evaluate.py baseline)",coverage_pct,48.5,97
+main,6.0,20261021_230706,GREEN,"Raw peak, all windows",mae,5.44,19
+main,6.0,20261021_230706,GREEN,"Raw peak, all windows",coverage_pct,100.0,97
+main,6.0,20261021_230706,GREEN,"HMM forward filter, all windows",mae,4.95,19
+main,6.0,20261021_230706,GREEN,"HMM forward filter, all windows",coverage_pct,100.0,97
+main,6.0,20261021_230706,GREEN,"HMM Viterbi, all windows",mae,4.21,19
+main,6.0,20261021_230706,GREEN,"HMM Viterbi, all windows",coverage_pct,100.0,97
+confidence,6.0,20261021_230706,GREEN,posterior -> forward within 10,auc,0.80,97
+confidence,6.0,20261021_230706,GREEN,SNR -> raw peak within 10,auc,0.70,97
+confidence,6.0,20261021_230706,GREEN,SNR -> forward within 10,auc,0.72,97
+confidence,6.0,20261021_230706,GREEN,posterior -> raw peak within 10,auc,0.81,97
+main,6.0,20261021_230706,CHROM,"App bpm_smooth, good/fair windows",mae,2.15,19
+main,6.0,20261021_230706,CHROM,"App bpm_smooth, good/fair windows",coverage_pct,51.5,97
+main,6.0,20261021_230706,CHROM,"Raw peak, good/fair windows (the evaluate.py baseline)",mae,2.33,19
+main,6.0,20261021_230706,CHROM,"Raw peak, good/fair windows (the evaluate.py baseline)",coverage_pct,58.8,97
+main,6.0,20261021_230706,CHROM,"Raw peak, all windows",mae,2.94,19
+main,6.0,20261021_230706,CHROM,"Raw peak, all windows",coverage_pct,100.0,97
+main,6.0,20261021_230706,CHROM,"HMM forward filter, all windows",mae,2.68,19
+main,6.0,20261021_230706,CHROM,"HMM forward filter, all windows",coverage_pct,100.0,97
+main,6.0,20261021_230706,CHROM,"HMM Viterbi, all windows",mae,3.63,19
+main,6.0,20261021_230706,CHROM,"HMM Viterbi, all windows",coverage_pct,100.0,97
+confidence,6.0,20261021_230706,CHROM,posterior -> forward within 10,auc,0.87,97
+confidence,6.0,20261021_230706,CHROM,SNR -> raw peak within 10,auc,0.91,97
+confidence,6.0,20261021_230706,CHROM,SNR -> forward within 10,auc,0.87,97
+confidence,6.0,20261021_230706,CHROM,posterior -> raw peak within 10,auc,0.89,97
+main,6.0,20261021_230706,POS,"App bpm_smooth, good/fair windows",mae,2.22,19
+main,6.0,20261021_230706,POS,"App bpm_smooth, good/fair windows",coverage_pct,54.6,97
+main,6.0,20261021_230706,POS,"Raw peak, good/fair windows (the evaluate.py baseline)",mae,2.35,19
+main,6.0,20261021_230706,POS,"Raw peak, good/fair windows (the evaluate.py baseline)",coverage_pct,62.9,97
+main,6.0,20261021_230706,POS,"Raw peak, all windows",mae,4.10,19
+main,6.0,20261021_230706,POS,"Raw peak, all windows",coverage_pct,100.0,97
+main,6.0,20261021_230706,POS,"HMM forward filter, all windows",mae,4.21,19
+main,6.0,20261021_230706,POS,"HMM forward filter, all windows",coverage_pct,100.0,97
+main,6.0,20261021_230706,POS,"HMM Viterbi, all windows",mae,4.21,19
+main,6.0,20261021_230706,POS,"HMM Viterbi, all windows",coverage_pct,100.0,97
+confidence,6.0,20261021_230706,POS,posterior -> forward within 10,auc,0.89,97
+confidence,6.0,20261021_230706,POS,SNR -> raw peak within 10,auc,0.89,97
+confidence,6.0,20261021_230706,POS,SNR -> forward within 10,auc,0.89,97
+confidence,6.0,20261021_230706,POS,posterior -> raw peak within 10,auc,0.90,97
+secondary,1.5,20261021_185356,GREEN,raw,pct_within_10,77.6,49
+secondary,1.5,20261021_185356,GREEN,forward,pct_within_10,87.8,49
+secondary,1.5,20261021_185356,GREEN,viterbi,pct_within_10,77.6,49
+secondary,1.5,20261021_185356,CHROM,raw,pct_within_10,95.9,49
+secondary,1.5,20261021_185356,CHROM,forward,pct_within_10,100.0,49
+secondary,1.5,20261021_185356,CHROM,viterbi,pct_within_10,100.0,49
+secondary,1.5,20261021_185356,POS,raw,pct_within_10,59.2,49
+secondary,1.5,20261021_185356,POS,forward,pct_within_10,69.4,49
+secondary,1.5,20261021_185356,POS,viterbi,pct_within_10,89.8,49
+secondary,1.5,20261021_215101,GREEN,raw,pct_within_10,77.8,54
+secondary,1.5,20261021_215101,GREEN,forward,pct_within_10,85.2,54
+secondary,1.5,20261021_215101,GREEN,viterbi,pct_within_10,85.2,54
+secondary,1.5,20261021_215101,CHROM,raw,pct_within_10,68.5,54
+secondary,1.5,20261021_215101,CHROM,forward,pct_within_10,75.9,54
+secondary,1.5,20261021_215101,CHROM,viterbi,pct_within_10,75.9,54
+secondary,1.5,20261021_215101,POS,raw,pct_within_10,72.2,54
+secondary,1.5,20261021_215101,POS,forward,pct_within_10,77.8,54
+secondary,1.5,20261021_215101,POS,viterbi,pct_within_10,75.9,54
+secondary,3.0,20261021_185356,GREEN,raw,pct_within_10,77.6,49
+secondary,3.0,20261021_185356,GREEN,forward,pct_within_10,85.7,49
+secondary,3.0,20261021_185356,GREEN,viterbi,pct_within_10,79.6,49
+secondary,3.0,20261021_185356,CHROM,raw,pct_within_10,95.9,49
+secondary,3.0,20261021_185356,CHROM,forward,pct_within_10,100.0,49
+secondary,3.0,20261021_185356,CHROM,viterbi,pct_within_10,100.0,49
+secondary,3.0,20261021_185356,POS,raw,pct_within_10,59.2,49
+secondary,3.0,20261021_185356,POS,forward,pct_within_10,61.2,49
+secondary,3.0,20261021_185356,POS,viterbi,pct_within_10,89.8,49
+secondary,3.0,20261021_215101,GREEN,raw,pct_within_10,77.8,54
+secondary,3.0,20261021_215101,GREEN,forward,pct_within_10,83.3,54
+secondary,3.0,20261021_215101,GREEN,viterbi,pct_within_10,85.2,54
+secondary,3.0,20261021_215101,CHROM,raw,pct_within_10,68.5,54
+secondary,3.0,20261021_215101,CHROM,forward,pct_within_10,72.2,54
+secondary,3.0,20261021_215101,CHROM,viterbi,pct_within_10,75.9,54
+secondary,3.0,20261021_215101,POS,raw,pct_within_10,72.2,54
+secondary,3.0,20261021_215101,POS,forward,pct_within_10,77.8,54
+secondary,3.0,20261021_215101,POS,viterbi,pct_within_10,75.9,54
+secondary,6.0,20261021_185356,GREEN,raw,pct_within_10,77.6,49
+secondary,6.0,20261021_185356,GREEN,forward,pct_within_10,81.6,49
+secondary,6.0,20261021_185356,GREEN,viterbi,pct_within_10,79.6,49
+secondary,6.0,20261021_185356,CHROM,raw,pct_within_10,95.9,49
+secondary,6.0,20261021_185356,CHROM,forward,pct_within_10,98.0,49
+secondary,6.0,20261021_185356,CHROM,viterbi,pct_within_10,100.0,49
+secondary,6.0,20261021_185356,POS,raw,pct_within_10,59.2,49
+secondary,6.0,20261021_185356,POS,forward,pct_within_10,59.2,49
+secondary,6.0,20261021_185356,POS,viterbi,pct_within_10,77.6,49
+secondary,6.0,20261021_215101,GREEN,raw,pct_within_10,77.8,54
+secondary,6.0,20261021_215101,GREEN,forward,pct_within_10,83.3,54
+secondary,6.0,20261021_215101,GREEN,viterbi,pct_within_10,85.2,54
+secondary,6.0,20261021_215101,CHROM,raw,pct_within_10,68.5,54
+secondary,6.0,20261021_215101,CHROM,forward,pct_within_10,70.4,54
+secondary,6.0,20261021_215101,CHROM,viterbi,pct_within_10,75.9,54
+secondary,6.0,20261021_215101,POS,raw,pct_within_10,72.2,54
+secondary,6.0,20261021_215101,POS,forward,pct_within_10,75.9,54
+secondary,6.0,20261021_215101,POS,viterbi,pct_within_10,75.9,54

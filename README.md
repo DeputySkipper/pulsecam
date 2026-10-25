@@ -4,7 +4,7 @@ Contactless heart rate from an ordinary webcam, using remote photoplethysmograph
 
 Course project for Image & Video Processing (IVP). Classical image and signal processing only, no machine learning. **Not a medical device.**
 
-Screenshots are not kept in the repository. Regenerate the dashboard shot with `python tools/ui_shots.py --dashboard` (it writes `debug/shots/dashboard.png`, taken from the mock source at a steady 72 BPM, so the video pane is the mock's placeholder).
+Screenshots are not kept in the repository. Regenerate them with the commands under [UI screenshots](#ui-screenshots): `python tools/ui_shots.py --dashboard` writes `debug/shots/dashboard.png`, taken from the mock source at a steady 72 BPM, so the video pane is the mock's placeholder.
 
 ## Limits you should know about
 
@@ -50,16 +50,24 @@ Clips recorded by the app go to `recordings/`. The lossless videos from the buil
 | Control | What it does |
 |---|---|
 | **Start / Stop** | Starts or stops the selected source. The source cannot be changed while running. |
-| **Method** | GREEN (baseline), CHROM (default) or POS. All three are also shown side by side under the BPM. |
+| **Method** | GREEN (baseline), CHROM (default) or POS. All three are also shown side by side in the cards under the heart-rate panel (the active one has a white outline). |
 | **Source** | Mock, Webcam or File... |
-| **Light frame** (`L`) | Optional white border around the dashboard. Off by default; the fixed torch is the lighting plan. |
-| **Fullscreen** (`F`, `Esc` to leave) | Fullscreen toggle. |
+| **Light frame** (`L`, the sun icon) | Optional white border around the dashboard. Off by default; the fixed torch is the lighting plan. While it is on, the window's minimum size grows by the border so the panels are not squeezed. |
+| **Fullscreen** (`F`, `Esc` to leave; the corners icon) | Fullscreen toggle. |
 | **Record** | Webcam only. Writes a lossless clip, a means CSV and a meta file (see below). |
 | **Ref BPM**, device, **Log** | Type a reference reading and pick its device. **Log** appends the current reading and the reference to `results/readings.csv`. The reference is also written into the last recording's meta file. |
 
 These are the only keyboard shortcuts.
 
 ### Reading the screen
+
+Everything shown comes from the live estimator output (nothing is simulated).
+
+- **Top bar:** the source and its measured rate ("Camera 30 fps", "Mock ...", "File ..."; "--" when nothing is measured).
+- **Video:** two tags sit on top of the picture, never in the frame data. The top-left tag shows the face state taken from the capture flags: NO FACE, LOCKING (the face box is being locked), FACE LOCKED (frozen after the lock phase), or FACE FOUND if a face is present but no lock flag has been seen. The bottom-right tag shows the live ROI brightness and the measured FPS.
+- **Signal quality panel:** the current quality (Good, Fair, Poor), the SNR on a -4 to +8 dB scale with the poor, fair and good zones (the boundaries are `SNR_FAIR_DB` and `SNR_GOOD_DB`), and the share of good, fair and poor windows over the last 60 s.
+- **Heart-rate panel:** the smoothed BPM, the state line, a heartbeat dot that beats at the displayed rate (still when there is no number or only a held value), the last 5 s of the filtered pulse, and Method, SNR, Light (live brightness out of 255, with a tick at the low-light threshold), Window and Range.
+- **Plots:** the filtered pulse over the last 15 s, and the spectrum from 54 to 180 BPM. Move the pointer over the spectrum for a crosshair and the BPM and Hz under it; the header returns to the detected peak when the pointer leaves.
 
 The big number is the smoothed BPM. The state line says what is going on:
 
@@ -124,9 +132,20 @@ python tools/check_capture.py             # 10 s camera check: FPS, % frames wit
 python tools/check_capture.py --file clip.mkv
 python estimator.py                       # console demo: all three methods side by side, with a summary
 python estimator.py --save-means          # the same, also writing recordings/<stamp>_means.csv
-python tools/ui_shots.py                  # UI screenshots of every mock state into debug/shots/
+python tools/ui_shots.py                  # UI screenshots (see below) into debug/shots/
 python tools/ui_shots.py --dashboard      # one steady 72 BPM dashboard shot -> debug/shots/dashboard.png
 ```
+
+### UI screenshots
+
+`tools/ui_shots.py` drives the real window against the mock source without a screen and saves PNGs to `debug/shots/` (not committed):
+
+| Command | Writes |
+|---|---|
+| `python tools/ui_shots.py --dashboard` | `dashboard.png`: steady 72 BPM at 1440x900 |
+| `python tools/ui_shots.py` | `1_warming_up.png` to `6_no_face.png` (every mock state at 1280x800), `7_light_frame_on_1440x1000.png`, and `size_1100x720.png`, `size_1366x768.png`, `size_1440x900.png` (the layout at the minimum, a common laptop and the design size; each prints the heights the hero, cards and plots took) |
+
+On Windows the script points Qt's offscreen platform at `C:\Windows\Fonts` (set `QT_QPA_FONTDIR` to override), because that platform finds no fonts on its own and every letter would be an empty box. The look uses IBM Plex Sans and IBM Plex Mono if they are installed and otherwise the system sans-serif and monospace, so a shot taken on a machine without Plex differs slightly in text widths. Hover states are not captured (there is no pointer offscreen).
 
 ## How it works
 
@@ -151,7 +170,7 @@ Dashboard: video, BPM, state line, waveform, spectrum
 
 | File | Role |
 |---|---|
-| `app.py`, `ui/` | The dashboard (PySide6 and pyqtgraph) |
+| `app.py`, `ui/` | The dashboard (PySide6 and pyqtgraph): `theme.py` (colours, fonts, sizes, the `ANIMATIONS` switch for hover and heartbeat animation), `panels.py` (glass panel, top bar, signal-quality panel), `animated.py` (hover-scaled buttons), `widgets.py` (video, heart-rate panel, method cards, plots), `main_window.py` |
 | `worker.py`, `capture.py` | Capture thread; webcam, file and mock sources |
 | `face_roi.py` | Face detection, ROI geometry, per-frame mean RGB |
 | `signal_proc.py` | Pure signal-processing functions |
