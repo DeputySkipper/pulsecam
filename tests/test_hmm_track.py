@@ -1,5 +1,6 @@
 """Tests for tools/hmm_track.py (H2). All synthetic, fixed seeds; no recordings needed."""
 import itertools
+import shutil
 import sys
 from pathlib import Path
 
@@ -10,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 import hmm_track as H  # noqa: E402
 
 GRID = H.BPM_GRID
+REAL_OUT = H.OUT_DIR              # the committed results folder, captured before any test redirects OUT_DIR
 PEAK_WIDTH = 2.0       # BPM, roughly the width of a 15 s Hann-windowed peak
 DISTRACTOR_BPM = 56.0  # the false low-frequency peak seen near the band edge (issues 4 and 5)
 
@@ -165,8 +167,111 @@ def test_reading_mae_skips_minutes_without_a_number():
 
 
 def test_figure_is_written(tmp_path):
+    pytest.importorskip("matplotlib")          # only the figure needs it; a missing package must skip, not fail
     if not (H.OUT_DIR / f"tracks_{H.MAIN_CLIP}_{H.config.DEFAULT_METHOD}.npz").exists():
         pytest.skip("run `python tools/hmm_track.py evaluate` first")
     out = tmp_path / "fig.png"
     H.plot_figure(out)
     assert out.stat().st_size > 10_000
+
+
+# ---------------------------------------------------------------- gaps: after a reset the windows are not 1 s apart
+
+def test_window_steps_counts_whole_seconds_and_is_never_below_one():
+    t = np.array([0.0, 1.0, 2.02, 17.0, 17.4, 18.5])           # differences 1, 1.02, 14.98, 0.4, 1.1
+    assert H.window_steps(t).tolist() == [1, 1, 15, 1, 1]
+
+
+def test_gap_aware_filter_follows_a_rate_change_across_a_gap_at_once():
+    truth = np.r_[np.full(20, 80.0), np.full(10, 100.0)]       # 80 BPM, a 15 s gap during which the rate rose, then 100
+    t = np.r_[np.arange(20.0), 35.0 + np.arange(10.0)]
+    P = spectra(truth, seed=1)
+    old = H.track(P)["forward_bpm"]
+    new = H.track(P, steps=H.window_steps(t))["forward_bpm"]
+    assert abs(new[20] - 100) <= 2                              # the very first window after the gap
+    assert abs(old[20] - 100) > 5                               # the one-second assumption is still anchored near 80
+    assert np.all(np.abs(new[:20] - 80) <= 1) and np.all(np.abs(new[21:] - 100) <= 1)
+
+
+def test_steps_of_one_are_the_same_as_no_steps():
+    P = spectra(np.linspace(95, 80, 30), np.random.default_rng(3).random(30) < 0.3)
+    a, b = H.track(P), H.track(P, steps=np.ones(29, dtype=int))
+    assert np.array_equal(a["viterbi_bpm"], b["viterbi_bpm"]) and np.allclose(a["posterior"], b["posterior"])
+
+
+@pytest.mark.parametrize("bad", [np.ones(3, dtype=int), np.array([1, 0, 1, 1]), np.array([1, -2, 1, 1])])
+def test_steps_are_validated(bad):
+    with pytest.raises(ValueError):
+        H.track(spectra(np.full(5, 80.0)), steps=bad)
+
+
+def test_transition_across_a_gap_is_a_flatter_distribution():
+    A = H.transition_matrix()
+    for k in (2, 15, 500):
+        Ak = np.linalg.matrix_power(A, k)
+        assert np.allclose(Ak.sum(axis=1), 1.0) and np.all(Ak > 0)
+    assert np.diag(np.linalg.matrix_power(A, 15)).max() < np.diag(A).min()      # a long gap forgets the old rate
+
+
+def test_viterbi_and_forward_with_gaps_match_brute_force_on_a_tiny_model():
+    rng = np.random.default_rng(6)
+    K, T = 4, 5
+    A = H.transition_matrix(np.arange(K, dtype=float), sigma=1.0, floor=1e-3)
+    steps = np.array([1, 3, 1, 2])
+    mats = [np.linalg.matrix_power(A, int(k)) for k in steps]
+    ll = np.log(rng.random((T, K)) + 0.05)
+    best = max(itertools.product(range(K), repeat=T),
+               key=lambda p: -np.log(K) + ll[0, p[0]] + sum(np.log(mats[t - 1][p[t - 1], p[t]]) + ll[t, p[t]] for t in range(1, T)))
+    assert tuple(H.viterbi(ll, A, steps)) == best
+    post, belief = H.forward_filter(ll, A, steps), np.full(K, 1.0 / K)
+    for t in range(T):
+        belief = (belief if t == 0 else belief @ mats[t - 1]) * np.exp(ll[t])
+        belief /= belief.sum()
+        assert np.allclose(post[t], belief)
+
+
+# ---------------------------------------------------------------- paths and reproducibility
+
+def _results_listing():
+    return sorted((p.name, p.stat().st_mtime_ns) for p in REAL_OUT.iterdir()) if REAL_OUT.exists() else None
+
+
+def _tiny_recordings(tmp_path):
+    from test_evaluate import steady, write_clip
+    rec = tmp_path / "rec"
+    rec.mkdir()
+    write_clip(rec, steady(72), seconds=40.0, meta={"ref_bpm": 72})
+    return rec
+
+
+def test_output_paths_are_looked_up_when_called_not_when_imported(tmp_path, monkeypatch):
+    rec, out = _tiny_recordings(tmp_path), tmp_path / "out"
+    monkeypatch.setattr(H, "RECORDINGS", rec)
+    monkeypatch.setattr(H, "OUT_DIR", out)
+    before = _results_listing()
+    paths = H.export_spectra()
+    assert len(paths) == len(H.METHODS) and all(p.parent == out for p in paths)
+    assert H.load_spectra("20261021_230706", "CHROM")["power"].shape[1] == len(GRID)
+    assert _results_listing() == before                          # the committed results were not touched
+
+
+def test_command_line_flags_redirect_input_and_output(tmp_path, capsys):
+    rec, out = _tiny_recordings(tmp_path), tmp_path / "elsewhere"
+    before = _results_listing()
+    assert H.main(["export", "--recordings", str(rec), "--out", str(out)]) == 0
+    assert len(list(out.glob("spectra_*.npz"))) == len(H.METHODS)
+    assert "spectra_20261021_230706_CHROM.npz" in capsys.readouterr().out
+    assert _results_listing() == before
+
+
+def test_evaluate_reproduces_the_committed_results(tmp_path):
+    """The whole pipeline from the means CSVs to hmm_results.csv, run in a scratch folder, must equal what is committed."""
+    committed = REAL_OUT / "hmm_results.csv"
+    clips = [H.RECORDINGS / f"{c}_means.csv" for c in (H.MAIN_CLIP, *H.SECONDARY)]
+    if not committed.exists() or not all(p.exists() for p in clips):
+        pytest.skip("needs the committed results and the recordings (recordings/ is not in git)")
+    rec, out = tmp_path / "rec", tmp_path / "out"
+    shutil.copytree(H.RECORDINGS, rec)
+    res = H.evaluate_all(rec, out)
+    H.write_csv(res, out / "hmm_results.csv")
+    assert (out / "hmm_results.csv").read_text().splitlines() == committed.read_text().splitlines()

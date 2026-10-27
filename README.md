@@ -50,9 +50,9 @@ Clips recorded by the app go to `recordings/`. The lossless videos from the buil
 | Control | What it does |
 |---|---|
 | **Start / Stop** | Starts or stops the selected source. The source cannot be changed while running. |
-| **Method** | GREEN (baseline), CHROM (default) or POS. All three are also shown side by side in the cards under the heart-rate panel (the active one has a white outline). |
+| **Method** | GREEN (baseline), CHROM (default) or POS. All three are also shown side by side in the cards under the heart-rate panel (the active one has a cyan outline). |
 | **Source** | Mock, Webcam or File... |
-| **Light frame** (`L`, the sun icon) | Optional white border around the dashboard. Off by default; the fixed torch is the lighting plan. While it is on, the window's minimum size grows by the border so the panels are not squeezed. |
+| **Light frame** (`L`, the sun icon) | Optional edge light: a white border (`LIGHT_FRAME_PX`) around the dashboard that fades softly into the dark UI, whose corners are rounded, like the macOS edge light. It adds about a quarter more screen brightness than a plain white border at 1440x900, and the panels darken while it is on so text stays readable. Off by default; the fixed torch is the lighting plan. While it is on, the window's minimum size grows by the border so the panels are not squeezed (a thicker border would squeeze them on a 900 px screen). |
 | **Fullscreen** (`F`, `Esc` to leave; the corners icon) | Fullscreen toggle. |
 | **Record** | Webcam only. Writes a lossless clip, a means CSV and a meta file (see below). |
 | **Ref BPM**, device, **Log** | Type a reference reading and pick its device. **Log** appends the current reading and the reference to `results/readings.csv`. The reference is also written into the last recording's meta file. |
@@ -132,6 +132,8 @@ python tools/check_capture.py             # 10 s camera check: FPS, % frames wit
 python tools/check_capture.py --file clip.mkv
 python estimator.py                       # console demo: all three methods side by side, with a summary
 python estimator.py --save-means          # the same, also writing recordings/<stamp>_means.csv
+python tools/hmm_track.py evaluate        # offline HMM heart-rate tracker over the recorded clips (also: export, figure); results in results/hmm/.
+                                          # --recordings DIR --out DIR runs it without touching results/hmm/. Not used by the app.
 python tools/ui_shots.py                  # UI screenshots (see below) into debug/shots/
 python tools/ui_shots.py --dashboard      # one steady 72 BPM dashboard shot -> debug/shots/dashboard.png
 ```
@@ -165,7 +167,7 @@ Dashboard: video, BPM, state line, waveform, spectrum
 ```
 
 - Means are computed on the clean frame; overlays are drawn only on the preview copy.
-- The ROI box is frozen after a 2 s lock so detector jitter cannot enter the signal. If the face moves, it re-locks, and the new segment is gain-matched to the old one so the level step does not look like a pulse.
+- The face is tracked live (grey box); the measurement ROIs (cyan) hold perfectly still while the face stays within a small dead band, so detector jitter cannot enter the signal, and glide to the face when it really moves. The new segment is gain-matched to the old one so the level step does not look like a pulse.
 - Every tunable is in `config.py`. Nothing else holds a magic number.
 
 | File | Role |

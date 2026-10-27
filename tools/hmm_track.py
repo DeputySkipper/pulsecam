@@ -96,7 +96,9 @@ def replay_method(clip: dict, method: str) -> dict:
         "power": np.array([r["power"] for r in rows]).reshape(len(rows), len(BPM_GRID))}
 
 
-def export_spectra(directory: Path = RECORDINGS, out_dir: Path = OUT_DIR) -> list[Path]:
+def export_spectra(directory: Path | None = None, out_dir: Path | None = None) -> list[Path]:
+    """Defaults are looked up when called (not when the module is imported), so RECORDINGS and OUT_DIR can be redirected."""
+    directory, out_dir = directory or RECORDINGS, out_dir or OUT_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
     written = []
     for means in sorted(directory.glob("*_means.csv")):
@@ -141,16 +143,35 @@ def transition_matrix(grid: np.ndarray = BPM_GRID, sigma: float = SIGMA_BPM, flo
     return a / a.sum(axis=1, keepdims=True)
 
 
-def viterbi(loglik: np.ndarray, trans: np.ndarray) -> np.ndarray:
-    """Most likely state-index path for (T, K) log-likelihoods, uniform prior, log space. Returns (T,) ints."""
+def window_steps(t_center: np.ndarray, step_sec: float = config.UPDATE_SEC) -> np.ndarray:
+    """(T-1,) whole 1 s steps between consecutive windows, never less than 1. Windows are one second apart unless the
+    estimator was reset (face lost, a gap in the samples): then the heart rate had that many seconds to move."""
+    return np.maximum(1, np.rint(np.diff(np.asarray(t_center, dtype=float)) / step_sec)).astype(int)
+
+
+def _step_matrices(trans: np.ndarray, steps: np.ndarray | None, T: int) -> list[np.ndarray]:
+    """Transition matrix for each of the T-1 steps: A for one second, A^k across a gap of k seconds (still row-stochastic,
+    and flatter, so after a long gap the old estimate carries almost no weight)."""
+    if steps is None:
+        return [trans] * max(T - 1, 0)
+    steps = np.asarray(steps, dtype=int)
+    if steps.shape != (max(T - 1, 0),) or np.any(steps < 1):
+        raise ValueError(f"steps must hold {max(T - 1, 0)} integers >= 1, got shape {steps.shape}")
+    cache = {int(k): trans if k == 1 else np.linalg.matrix_power(trans, int(k)) for k in np.unique(steps)}
+    return [cache[int(k)] for k in steps]
+
+
+def viterbi(loglik: np.ndarray, trans: np.ndarray, steps: np.ndarray | None = None) -> np.ndarray:
+    """Most likely state-index path for (T, K) log-likelihoods, uniform prior, log space. Returns (T,) ints.
+    `steps` (T-1 whole seconds between windows, see window_steps) makes the transition across a gap A^k."""
     T, K = loglik.shape
     if T == 0:
         return np.zeros(0, dtype=int)
-    log_a = np.log(trans)
+    mats = _step_matrices(trans, steps, T)
     delta = np.full(K, -np.log(K)) + loglik[0]
     back = np.zeros((T, K), dtype=int)
     for t in range(1, T):
-        scores = delta[:, None] + log_a
+        scores = delta[:, None] + np.log(mats[t - 1])
         back[t] = np.argmax(scores, axis=0)
         delta = scores[back[t], np.arange(K)] + loglik[t]
     path = np.zeros(T, dtype=int)
@@ -160,13 +181,15 @@ def viterbi(loglik: np.ndarray, trans: np.ndarray) -> np.ndarray:
     return path
 
 
-def forward_filter(loglik: np.ndarray, trans: np.ndarray) -> np.ndarray:
-    """Filtering posteriors P(state_t | windows 0..t), shape (T, K), normalised at every step. Uses no future window."""
+def forward_filter(loglik: np.ndarray, trans: np.ndarray, steps: np.ndarray | None = None) -> np.ndarray:
+    """Filtering posteriors P(state_t | windows 0..t), shape (T, K), normalised at every step. Uses no future window.
+    `steps` as in viterbi()."""
     T, K = loglik.shape
+    mats = _step_matrices(trans, steps, T)
     post = np.zeros((T, K))
     belief = np.full(K, 1.0 / K)
     for t in range(T):
-        pred = belief if t == 0 else belief @ trans
+        pred = belief if t == 0 else belief @ mats[t - 1]
         w = pred * np.exp(loglik[t] - loglik[t].max())          # shifting by the max cancels in the normalisation
         s = w.sum()
         belief = w / s if s > 0 and np.isfinite(s) else np.full(K, 1.0 / K)
@@ -174,13 +197,18 @@ def forward_filter(loglik: np.ndarray, trans: np.ndarray) -> np.ndarray:
     return post
 
 
-def track(power: np.ndarray, grid: np.ndarray = BPM_GRID, sigma: float = SIGMA_BPM) -> dict:
+def track(power: np.ndarray, grid: np.ndarray = BPM_GRID, sigma: float = SIGMA_BPM, steps: np.ndarray | None = None) -> dict:
     """Run both decoders on (T, K) in-band power. Returns the Viterbi BPM path, the forward-filter BPM (argmax of
-    the posterior), its max posterior probability, and the posteriors."""
+    the posterior), its max posterior probability, and the posteriors.
+
+    Two properties to keep in mind when reading the output. (1) Consecutive windows share 14 of 15 s of data but are
+    treated as independent evidence. (2) The posterior of one 1 BPM state is small even for a clear peak, because a
+    spectral peak spans several bins: `forward_conf` (the max posterior, about 0.15 here) is not the probability that
+    the estimate is right (on the evaluation clip 70-80% of windows are within 10 BPM)."""
     ll = log_emission(power)
     a = transition_matrix(grid, sigma)
-    post = forward_filter(ll, a)
-    return {"viterbi_bpm": grid[viterbi(ll, a)], "forward_bpm": grid[np.argmax(post, axis=1)],
+    post = forward_filter(ll, a, steps)
+    return {"viterbi_bpm": grid[viterbi(ll, a, steps)], "forward_bpm": grid[np.argmax(post, axis=1)],
             "forward_conf": post.max(axis=1), "posterior": post}
 
 
@@ -193,8 +221,8 @@ TOL = config.EVAL_TOLERANCE_BPM
 GOOD_FAIR = ("good", "fair")
 
 
-def load_spectra(clip: str, method: str, directory: Path = OUT_DIR) -> dict:
-    z = np.load(directory / f"spectra_{clip}_{method}.npz")
+def load_spectra(clip: str, method: str, directory: Path | None = None) -> dict:
+    z = np.load((directory or OUT_DIR) / f"spectra_{clip}_{method}.npz")
     return {k: z[k] for k in z.files}
 
 
@@ -231,7 +259,7 @@ def reading_mae(readings: list, medians: dict) -> tuple[float | None, int]:
 
 def sources(sp: dict, sigma: float) -> tuple[dict, dict]:
     """Per-window BPM series (NaN = no number) for each thing compared, and the HMM tracks."""
-    tr = track(sp["power"], sigma=sigma)
+    tr = track(sp["power"], sigma=sigma, steps=window_steps(sp["t_center"]))
     good = np.isin(sp["quality"], GOOD_FAIR)
     nan = np.nan
     series = {
@@ -243,19 +271,20 @@ def sources(sp: dict, sigma: float) -> tuple[dict, dict]:
     return series, tr
 
 
-def evaluate_main(sigma: float, directory: Path = RECORDINGS) -> dict:
+def evaluate_main(sigma: float, directory: Path | None = None, out_dir: Path | None = None) -> dict:
     """Clip 230706 against the watch: per method, MAE and coverage of every source, the per-minute medians, and the
     AUC of the forward filter's max posterior and of the SNR as confidence measures."""
+    directory = directory or RECORDINGS
     clip = ev.load_clip(directory / f"{MAIN_CLIP}_means.csv")
     readings = ev.load_readings(clip)
     by_min: dict = {}
     for mn, v in readings:
         by_min.setdefault(mn, []).append(v)
-    clip_minutes = set(window_minutes(clip.start, load_spectra(MAIN_CLIP, METHODS[0])["t_center"]))
+    clip_minutes = set(window_minutes(clip.start, load_spectra(MAIN_CLIP, METHODS[0], out_dir)["t_center"]))
     ref_med = {mn: float(np.median(v)) for mn, v in by_min.items() if mn in clip_minutes}     # minutes the clip covers
     out = {"floor": None, "methods": {}}
     for method in METHODS:
-        sp = load_spectra(MAIN_CLIP, method)
+        sp = load_spectra(MAIN_CLIP, method, out_dir)
         minutes = window_minutes(clip.start, sp["t_center"])
         series, tr = sources(sp, sigma)
         covered = sorted({mn for mn in minutes if mn in ref_med})
@@ -282,12 +311,12 @@ def evaluate_main(sigma: float, directory: Path = RECORDINGS) -> dict:
     return out
 
 
-def evaluate_secondary(sigma: float) -> list[dict]:
+def evaluate_secondary(sigma: float, out_dir: Path | None = None) -> list[dict]:
     """% of windows within +-10 BPM of the hand count, raw peak vs HMM, all windows."""
     rows = []
     for clip, ref in SECONDARY.items():
         for method in METHODS:
-            sp = load_spectra(clip, method)
+            sp = load_spectra(clip, method, out_dir)
             series, _ = sources(sp, sigma)
             r = {"clip": clip, "ref": ref, "method": method, "windows": len(sp["bpm"])}
             for key, name in (("raw", "Raw peak, all windows"), ("forward", "HMM forward filter, all windows"),
@@ -298,15 +327,16 @@ def evaluate_secondary(sigma: float) -> list[dict]:
     return rows
 
 
-def evaluate_all() -> dict:
-    export_spectra()
+def evaluate_all(directory: Path | None = None, out_dir: Path | None = None) -> dict:
+    directory, out_dir = directory or RECORDINGS, out_dir or OUT_DIR
+    export_spectra(directory, out_dir)
     res = {"main": {}, "secondary": {}}
     for sigma in SIGMAS:
-        res["main"][sigma] = evaluate_main(sigma)
-        res["secondary"][sigma] = evaluate_secondary(sigma)
+        res["main"][sigma] = evaluate_main(sigma, directory, out_dir)
+        res["secondary"][sigma] = evaluate_secondary(sigma, out_dir)
     for method, m in res["main"][SIGMA_BPM]["methods"].items():
         t = m["tracks"]
-        np.savez(OUT_DIR / f"tracks_{MAIN_CLIP}_{method}.npz", sigma=SIGMA_BPM, t_center=t["t_center"], ref=t["ref"],
+        np.savez(out_dir / f"tracks_{MAIN_CLIP}_{method}.npz", sigma=SIGMA_BPM, t_center=t["t_center"], ref=t["ref"],
                  viterbi_bpm=t["viterbi_bpm"], forward_bpm=t["forward_bpm"], forward_conf=t["forward_conf"])
     return res
 
@@ -385,6 +415,8 @@ def markdown(res: dict) -> str:
     L += ["", "## 5. Notes", "",
           "- Windows with no spectrum would give the HMM no evidence (uniform emission); on these clips every window has a spectrum, and no clip has a gap between windows, so each window is a 1 s step.",
           "- The app baseline row is `bpm_smooth` on good/fair windows, as the handoff specifies. The next row, the raw peak on good/fair windows, is what `tools/evaluate.py` scores (CHROM 2.3, POS 2.4, GREEN 5.2) and is included as a check that this script reproduces it.",
+          "- The model treats consecutive windows as independent evidence although they share 14 of 15 s of data, and the forward filter's max posterior (about 0.15 here) is small because a spectral peak spans several 1 BPM bins. It ranks windows by reliability (the AUC above) but is not the probability that the estimate is right: on the main clip 70-80% of windows are within 10 BPM of the watch.",
+          "- Windows sit on a 1 s step grid by their centre time (`window_steps`). After a reset (face lost, a gap in the samples) the transition across the gap is A^k, so the heart rate may move during it. No clip here has a gap, so every step is 1 and this changes no number in this table.",
           "- The sigma = 3 forward and Viterbi tracks for the main clip are saved in `results/hmm/tracks_<clip>_<method>.npz` for the H4 figure.",
           "", "Reproduce: `python tools/hmm_track.py evaluate`.", ""]
     return "\n".join(L)
@@ -409,16 +441,18 @@ def write_csv(res: dict, path: Path) -> None:
 
 # ---------------------------------------------------------------- H4: figure
 
-def plot_figure(path: Path, method: str = config.DEFAULT_METHOD, directory: Path = RECORDINGS) -> None:
+def plot_figure(path: Path, method: str = config.DEFAULT_METHOD, directory: Path | None = None,
+                out_dir: Path | None = None) -> None:
     """Spectrogram of clip 230706 (time x BPM, colour = power normalised to each window's maximum) with the raw peak,
     the app's bpm_smooth, the Viterbi track and the watch readings on top. Needs the files from `evaluate`."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
+    directory, out_dir = directory or RECORDINGS, out_dir or OUT_DIR
     clip = ev.load_clip(directory / f"{MAIN_CLIP}_means.csv")
-    sp = load_spectra(MAIN_CLIP, method)
-    tr = np.load(OUT_DIR / f"tracks_{MAIN_CLIP}_{method}.npz")
+    sp = load_spectra(MAIN_CLIP, method, out_dir)
+    tr = np.load(out_dir / f"tracks_{MAIN_CLIP}_{method}.npz")
     t = sp["t_center"]
     P = sp["power"] / np.nanmax(sp["power"], axis=1, keepdims=True)
     dt = float(np.median(np.diff(t)))
@@ -458,21 +492,25 @@ def plot_figure(path: Path, method: str = config.DEFAULT_METHOD, directory: Path
     plt.close(fig)
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("command", choices=["export", "evaluate", "figure"])
-    cmd = ap.parse_args().command
+    ap.add_argument("--recordings", type=Path, help="folder with the means CSVs (default: recordings/)")
+    ap.add_argument("--out", type=Path, help="folder for the results (default: results/hmm/); use it to run without touching the committed results")
+    args = ap.parse_args(argv)
+    cmd, rec, out = args.command, args.recordings, args.out or OUT_DIR
     if cmd == "figure":
-        plot_figure(OUT_DIR / f"hmm_{MAIN_CLIP[-6:]}.png")
-        print(f"wrote {OUT_DIR / f'hmm_{MAIN_CLIP[-6:]}.png'}")
+        path = out / f"hmm_{MAIN_CLIP[-6:]}.png"
+        plot_figure(path, directory=rec, out_dir=out)
+        print(f"wrote {path}")
         return 0
     if cmd == "evaluate":
-        res = evaluate_all()
-        (OUT_DIR / "hmm_table.md").write_text(markdown(res), encoding="utf-8")
-        write_csv(res, OUT_DIR / "hmm_results.csv")
-        print(f"wrote {OUT_DIR / 'hmm_table.md'} and {OUT_DIR / 'hmm_results.csv'}")
+        res = evaluate_all(rec, out)
+        (out / "hmm_table.md").write_text(markdown(res), encoding="utf-8")
+        write_csv(res, out / "hmm_results.csv")
+        print(f"wrote {out / 'hmm_table.md'} and {out / 'hmm_results.csv'}")
         return 0
-    paths = export_spectra()
+    paths = export_spectra(rec, out)
     print(f"{'file':54s} {'windows':>7s} {'spectra':>7s} {'max |argmax-bpm|':>17s} {'>1 BPM':>6s} {'min P(bpm)/Pmax':>15s}")
     for p in paths:
         c = check_argmax(p)

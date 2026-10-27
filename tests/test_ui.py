@@ -153,9 +153,9 @@ def test_window_walks_through_every_state(window):
     assert p.state_line.text() == "More light needed"
     t = drive(window, window._mock, t, 41.0)
     assert p.state_line.text() == "Hold still"
-    t = drive(window, window._mock, t, 50.0)
+    t = drive(window, window._mock, t, 52.0)
     assert p.state_line.text() == "Hold still" and p.number.text() == "--"           # held value dropped after the limit
-    drive(window, window._mock, t, 54.0)
+    drive(window, window._mock, t, 66.0)
     assert p.state_line.text() == "No face detected" and p.number.text() == "--"
 
 
@@ -416,7 +416,7 @@ def test_log_button_explains_when_it_cannot_log(live, tmp_path):
 # ---- U1: shell, theme tokens, hover animation
 
 from PySide6.QtCore import QEvent, QPoint, Qt
-from PySide6.QtGui import QFocusEvent, QFontMetrics, QImage, QRegion
+from PySide6.QtGui import QColor, QFocusEvent, QFontMetrics, QImage, QRegion
 from PySide6.QtWidgets import QWidget
 
 from ui.animated import AnimButton, ComboButton, mix_color, scale_target
@@ -440,15 +440,49 @@ def edge_alphas(img):
     return [img.pixelColor(x, y).alpha() for x, y in pts]
 
 
-def test_theme_tokens_follow_the_brief():
-    assert (theme.BG, theme.BG_HIGHLIGHT, theme.BORDER, theme.TEXT, theme.MUTED) == ("#0A0A0A", "#1B1B1D", "#26262A", "#E8E8E8", "#9A9A9A")
-    assert (theme.BTN_FILL, theme.BTN_BORDER, theme.BTN_FILL_HOVER, theme.BTN_BORDER_HOVER) == ("#151516", "#333336", "#1F1F21", "#4A4A4E")
-    assert (theme.PRIMARY_FILL, theme.PRIMARY_TEXT, theme.FIELD_FILL) == ("#EDEDED", "#0A0A0A", "#0E0E0F")
-    assert (theme.GOOD, theme.FAIR, theme.POOR) == ("#7FBF9E", "#C9A85F", "#B26A78")
-    assert (theme.ZONE_GOOD, theme.ZONE_FAIR, theme.ZONE_POOR) == ("#477A60", "#8A7447", "#7A4450")
-    assert (theme.CONTROL_H, theme.CONTROL_RADIUS, theme.RADIUS, theme.TOPBAR_H, theme.LEFT_MAX_W) == (40, 8, 12, 56, 600)
+def test_theme_tokens_follow_the_clinical_design():
+    assert (theme.BG, theme.BG_TOP, theme.BORDER, theme.TEXT, theme.MUTED) == ("#030406", "#070B10", "#25313B", "#EAF0F4", "#AEBBC7")
+    assert (theme.BTN_FILL, theme.BTN_BORDER, theme.BTN_FILL_HOVER, theme.BTN_BORDER_HOVER) == ("#16202A", "#33414D", "#1E2B37", "#4C5E6D")
+    assert (theme.ACCENT, theme.PRIMARY_FILL, theme.PRIMARY_TEXT, theme.FIELD_FILL) == ("#4CC9D8", "#4CC9D8", "#04212A", "#0A1218")
+    assert (theme.GOOD, theme.FAIR, theme.POOR) == ("#3DDC97", "#F2B84B", "#FF6B6B")
+    assert (theme.ZONE_GOOD, theme.ZONE_FAIR, theme.ZONE_POOR) == ("#2E9E72", "#C79A3C", "#C25454")
+    assert (theme.CONTROL_H, theme.TOPBAR_H, theme.LEFT_MAX_W) == (40, 56, 600)       # layout sizes did not change
+    assert (theme.RADIUS, theme.CARD_RADIUS, theme.VIDEO_RADIUS, theme.CONTROL_RADIUS) == (20, 16, 16, 14)
     assert theme.MIN_WINDOW == (1100, 720) and theme.DESIGN_WINDOW == (1440, 900)
-    assert theme.PANEL_ALPHA == 0.035 and theme.CHECKED_BORDER == "#BDBDBD"
+    assert (theme.GLASS_TOP_ALPHA, theme.GLASS_BOTTOM_ALPHA) == (0.085, 0.035)
+    assert theme.GLASS_RIM_TOP > theme.GLASS_RIM_BOTTOM and theme.CHECKED_BORDER == theme.ACCENT
+    assert len(theme.AURORA) == 1 and theme.AURORA[0][4] <= 0.35        # one quiet ambient light, no colour fields
+    assert (theme.GRID_MINOR_PX, theme.GRID_MAJOR_EVERY) == (24, 5)
+    assert theme.GRID_MINOR_ALPHA < theme.GRID_MAJOR_ALPHA < theme.GRID_CROSS_ALPHA <= 0.35   # strong lines and crosses stand out, none shout
+
+
+def _luminance(rgb):
+    f = lambda v: v / 255 / 12.92 if v / 255 <= 0.03928 else ((v / 255 + 0.055) / 1.055) ** 2.4
+    return 0.2126 * f(rgb[0]) + 0.7152 * f(rgb[1]) + 0.0722 * f(rgb[2])
+
+
+def _contrast(a, b):
+    hi, lo = sorted((_luminance(a), _luminance(b)), reverse=True)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+def test_text_stays_legible_over_the_brightest_glass(app):
+    """Worst case: the brightest background pixel anywhere (a crossing of two strong grid lines plus its registration
+    cross, at the centre of the window), under a panel's scrim and the brightest part of its glass. Small labels use
+    MUTED, so it must reach 4.5:1 (WCAG AA); the main text must reach 7:1."""
+    d = Dashboard()
+    d.resize(1440, 900)
+    img = render_to_image(d)
+    pixels = [(img.pixelColor(x, y).red(), img.pixelColor(x, y).green(), img.pixelColor(x, y).blue())
+              for x in range(0, 1440, 8) for y in range(0, 900, 8)]
+    dimmed = tuple(c * (1 - theme.PANEL_SCRIM_ALPHA) for c in max(pixels, key=_luminance))
+    grid = QColor(theme.GRID_COLOR)                                          # plus the panel's own grid: two strong lines
+    inner = 2 * theme.PANEL_GRID_MAJOR_ALPHA
+    dimmed = tuple(c + (g - c) * inner for c, g in zip(dimmed, (grid.red(), grid.green(), grid.blue())))
+    glass = tuple(round(c + (255 - c) * theme.GLASS_TOP_ALPHA) for c in dimmed)
+    rgb = lambda hex_: (lambda c: (c.red(), c.green(), c.blue()))(QColor(hex_))
+    assert _contrast(rgb(theme.MUTED), glass) >= 4.5
+    assert _contrast(rgb(theme.TEXT), glass) >= 7.0
 
 
 def test_font_helper_sets_pixel_size_and_letter_spacing(app):
@@ -556,25 +590,61 @@ def test_start_button_glyph_follows_its_text(app):
     assert b.current_glyph() == "stop"
 
 
-def test_panel_paints_translucent_fill_and_a_border(app):
+def test_panel_paints_frosted_glass(app):
     p = Panel()
-    p.resize(200, 100)
+    p.resize(300, 100)
     img = render_to_image(p)
-    c = img.pixelColor(100, 50)
-    assert (c.red(), c.green(), c.blue()) == (255, 255, 255) and 8 <= c.alpha() <= 10           # white at 3.5%
-    edge = img.pixelColor(0, 50)
-    assert edge.alpha() > 240 and abs(edge.red() - 0x26) <= 3                                   # the 1 px #26262A border
-    assert img.pixelColor(0, 0).alpha() == 0                                                    # rounded corner is clear
+    px = lambda x, y: img.pixelColor(x, y)
+    c = px(150, 50)
+    assert 175 <= c.alpha() <= 200 and c.red() < 40                                              # a dark scrim (72% black) under faint white glass
+    assert px(150, 15).red() > px(150, 85).red() + 6                                             # the glass is a little brighter at the top
+    assert px(0, 50).red() > px(299, 50).red() + 40                                              # the rim fades from top left to bottom right
+    assert px(150, 0).red() > px(280, 0).red() + 10 or px(150, 1).red() > px(280, 1).red() + 5   # a fine highlight peaks along the top
+    assert px(0, 0).alpha() == 0 and px(2, 2).alpha() == 0                                       # the corner is clear
+    assert px(20, 20).alpha() > 0
 
 
-def test_dashboard_background_is_black_with_a_highlight_at_the_top_right(app):
+def _bg(width=1000, height=600):
+    d = Dashboard()
+    d.resize(width, height)
+    img = render_to_image(d)
+    return lambda x, y: (img.pixelColor(x, y).red(), img.pixelColor(x, y).green(), img.pixelColor(x, y).blue())
+
+
+def test_dashboard_background_is_near_black_with_almost_no_hue(app):
+    """Black mode: away from the grid lines the background is nearly black, in one cool family, with a gentle lift at the top."""
+    rgb = _bg()
+    between = [rgb(12 + 24 * i, 12 + 24 * j) for i in range(0, 41, 2) for j in range(0, 24, 2)]      # mid-way between grid lines
+    assert max(max(c) for c in between) < 45                              # near black everywhere
+    assert max(max(c) - min(c) for c in between) < 26                     # no rainbow: one cool family
+    assert sum(rgb(492, 2)) > sum(rgb(492, 590)) + 10                     # a gentle lift at the top, like ambient light
+
+
+def test_dashboard_has_a_measurement_grid_with_strong_lines_and_crosses(app):
+    rgb = _bg()
+    s = lambda x, y: sum(rgb(x, y))
+    assert s(504, 300) > s(492, 300) + 6                                  # a fine line (x = 21 * 24) beats the space beside it
+    assert s(480, 300) > s(504, 300) + 6                                  # every fifth line (x = 20 * 24) is stronger
+    assert s(476, 240) > s(452, 240) + 6                                  # a registration cross where two strong lines meet
+    assert s(300, 288) > s(300, 276) + 6                                  # horizontal lines too (y = 12 * 24)
+
+
+def test_grid_fades_towards_the_edges(app):
+    rgb = _bg()
+    s = lambda x, y: sum(rgb(x, y))
+    centre = s(504, 300) - s(492, 300)                                    # a fine line against its neighbour at the centre
+    edge = s(48, 564) - s(36, 564)                                        # the same near the bottom-left corner
+    assert centre > 0 and 0 <= edge < centre * 0.6
+
+
+def test_dashboard_background_is_redrawn_when_resized_and_follows_the_new_size(app):
     d = Dashboard()
     d.resize(1000, 600)
-    img = render_to_image(d)
-    bottom_left = img.pixelColor(20, 580)
-    assert (bottom_left.red(), bottom_left.green(), bottom_left.blue()) == (10, 10, 10)
-    top_right = img.pixelColor(700, 3)
-    assert top_right.red() > bottom_left.red() + 8                                              # the #1B1B1D highlight
+    first = render_to_image(d)
+    d.resize(500, 300)
+    second = render_to_image(d)
+    assert (first.width(), first.height()) == (1000, 600) and (second.width(), second.height()) == (500, 300)
+    assert second.pixelColor(250, 2).green() > second.pixelColor(250, 290).green()          # still painted: the top-centre lift is there
 
 
 def test_camera_text_names_the_actual_source():
@@ -852,11 +922,11 @@ def test_window_tags_follow_the_real_lock_flags_and_numbers(window):
     assert window.video.lock_tag.text() == "FACE LOCKED"
     t = drive(window, window._mock, t, 25.0)
     assert window.video.light_tag.text().startswith("LIGHT 16") and window.video.light_tag.text().endswith(" / FPS 30")
-    t = drive(window, window._mock, t, 54.0)                                      # the mock's no-face phase
+    t = drive(window, window._mock, t, 66.0)                                      # the mock's no-face phase
     assert window.video.lock_tag.text() == "NO FACE"
-    t = drive(window, window._mock, t, 57.0)                                      # the next cycle: a new face, a new lock
+    t = drive(window, window._mock, t, 69.0)                                      # the next cycle: a new face, a new lock
     assert window.video.lock_tag.text() == "LOCKING"
-    drive(window, window._mock, t, 60.0)
+    drive(window, window._mock, t, 72.0)
     assert window.video.lock_tag.text() == "FACE LOCKED"
 
 
@@ -976,7 +1046,7 @@ def test_dot_follows_the_displayed_bpm_and_stops_for_held_or_missing_values(wind
     assert window.panel.rate_label.text() == f"{window._result.bpm_smooth / 60:.1f} Hz"
     t = drive(window, window._mock, t, 41.0)
     assert window.panel.state_line.text() == "Hold still" and window.panel.beat.period_ms is None   # a held, greyed value does not pulse
-    drive(window, window._mock, t, 50.0)
+    drive(window, window._mock, t, 52.0)
     assert window.panel.number.text() == "--" and window.panel.beat.period_ms is None
     assert window.panel.rate_label.text() == "--"
 
@@ -1077,7 +1147,7 @@ def test_hero_state_dot_follows_the_state_kind(window):
     assert window.panel.state_dot._color == theme.GOOD and window.panel.state_line.text() == "Measuring"
     drive(window, window._mock, 25.0, 35.0)
     assert window.panel.state_line.text() == "More light needed" and window.panel.state_dot._color == theme.FAIR
-    drive(window, window._mock, 35.0, 54.0)
+    drive(window, window._mock, 35.0, 66.0)
     assert window.panel.state_line.text() == "No face detected" and window.panel.state_dot._color == theme.POOR
 
 
@@ -1273,6 +1343,7 @@ def test_right_column_is_flexible_in_height_and_never_overlaps(window, size):
 
 
 def test_layout_minimum_fits_the_minimum_window_so_nothing_is_squeezed(window):
+    QApplication.processEvents()      # size hints are only final once the stylesheet is polished (1116 px before, 1039 after)
     need = window.light.minimumSizeHint()
     assert need.width() <= 1100 and need.height() <= 720
 
@@ -1345,7 +1416,7 @@ def test_low_light_and_no_face_messages_survive_the_restyle(window):
     drive(window, window._mock, 0.0, 35.0)
     assert window.panel.state_line.text() == "More light needed"
     assert window.panel.state_dot._color == theme.FAIR
-    drive(window, window._mock, 35.0, 54.0)
+    drive(window, window._mock, 35.0, 66.0)
     assert window.panel.state_line.text() == "No face detected" and window.video.lock_tag.text() == "NO FACE"
 
 
@@ -1358,3 +1429,130 @@ def test_font_family_falls_back_to_the_system_fonts_when_plex_is_missing(app, mo
     theme.family.cache_clear()
     assert theme.family("sans") == theme.PLEX_SANS and theme.family("mono") == theme.PLEX_MONO      # Plex when installed
     theme.family.cache_clear()
+
+
+def test_panel_has_a_short_accent_notch_on_its_top_edge(app):
+    p = Panel()
+    p.resize(300, 100)
+    img = render_to_image(p)
+    notch, plain = img.pixelColor(50, 1), img.pixelColor(200, 1)
+    assert notch.green() > notch.red() + 20 and notch.blue() > notch.red() + 20       # cyan segment at the top left
+    assert abs(plain.green() - plain.red()) < 12                                       # the rest of the edge is neutral
+
+
+def test_labels_use_the_monospace_instrument_font(app):
+    from ui.panels import Lbl
+    assert Lbl("heart rate").font().family() == theme.family("mono")
+
+
+def test_plots_have_faint_grid_lines_behind_the_data(app):
+    from ui.widgets import PulsePlot, SpectrumPlot
+    pulse, spectrum = PulsePlot(), SpectrumPlot()
+    assert len(pulse.grid_lines) == len(range(0, int(config.WINDOW_SEC) + 1, 3))                 # a vertical line every 3 s
+    assert len(spectrum.grid_lines) == len(theme.SPECTRUM_TICKS_BPM) + 3                         # at the BPM ticks, plus 3 levels
+    for line in pulse.grid_lines + spectrum.grid_lines:
+        assert line.zValue() < 0 and line.pen.color().alphaF() <= 0.15
+    assert pulse.curve.zValue() >= 0 and spectrum.curve.zValue() >= 0
+
+
+def test_the_grid_continues_inside_panels_on_the_same_lines(app):
+    """A panel draws the window's grid in its own coordinates shifted by where it sits, so the lines run straight through."""
+    from PySide6.QtCore import QPoint
+    d = Dashboard()
+    d.resize(600, 400)
+    panel = Panel(d)
+    panel.setGeometry(50, 30, 300, 200)                                  # not a multiple of the grid step on purpose
+    panel.show()
+    img = render_to_image(d)
+    s = lambda x, y: sum((img.pixelColor(x, y).red(), img.pixelColor(x, y).green(), img.pixelColor(x, y).blue()))
+    line, gap = 3 * theme.GRID_MINOR_PX, 3 * theme.GRID_MINOR_PX - 12    # x = 72 is a grid line, x = 60 is not
+    assert s(line, 120) > s(gap, 120) + 4                                # inside the panel (y = 120)
+    assert s(line, 10) > s(gap, 10) + 4                                  # outside it (y = 10): the same x
+    assert window_origin_of(panel) == QPoint(50, 30)
+
+
+def window_origin_of(panel):
+    from ui.panels import window_origin
+    o = window_origin(panel)
+    return None if o is None else o.toPoint()
+
+
+def test_a_panel_without_a_dashboard_draws_no_grid(app):
+    from ui.panels import window_origin
+    assert window_origin(Panel()) is None
+
+
+# ---- the Light frame's edge light
+
+def _lit_dashboard(on=True, w=1000, h=700):
+    d = Dashboard()
+    d.resize(w, h)
+    d.set_light(on)
+    img = render_to_image(d)
+    return lambda x, y: (img.pixelColor(x, y).red(), img.pixelColor(x, y).green(), img.pixelColor(x, y).blue())
+
+
+def test_edge_light_is_solid_white_at_the_rim_and_in_the_corners(app):
+    rgb = _lit_dashboard()
+    assert min(rgb(2, 350)) > 245 and min(rgb(500, 2)) > 245 and min(rgb(997, 350)) > 245       # all four sides
+    assert min(rgb(3, 3)) > 245 and min(rgb(996, 696)) > 245                                      # the corners are white too
+    assert max(rgb(500, 350)) < 60                                                                # the middle stays dark
+
+
+def test_edge_light_fades_smoothly_into_the_dark_and_the_dark_area_has_rounded_corners(app):
+    rgb = _lit_dashboard()
+    lum = lambda x, y: sum(rgb(x, y))
+    profile = [lum(x, 350) for x in range(2, 2 + theme.LIGHT_GLOW_FADE_PX + theme.LIGHT_GLOW_EDGE_PX + 10, 6)]
+    assert all(a >= b - 3 for a, b in zip(profile, profile[1:]))                                  # never brightens going inwards
+    assert profile[0] > 700 and profile[-1] < 120                                                 # bright rim, dark inside
+    # 30 px in from both edges is inside the arc of the rounded corner, so it is closer to the light than a point 30 px in
+    # from one edge only; with a sharp-cornered rectangle the two would be equally bright.
+    assert lum(30, 30) > lum(30, 350) + 35
+
+
+def test_edge_light_adds_a_lot_of_light_compared_with_the_old_hard_frame(app):
+    lit, plain = _lit_dashboard(True), _lit_dashboard(False)
+    pts = [(x, y) for x in range(0, 1000, 10) for y in range(0, 700, 10)]
+    mean = lambda f: sum(sum(f(x, y)) for x, y in pts) / len(pts) / 3
+    assert mean(lit) > mean(plain) * 1.5 and mean(lit) > 70
+
+
+def test_the_edge_light_is_only_added_while_the_light_frame_is_on(app):
+    window = MainWindow(source="mock")
+    assert not window.light.inner.light_on
+    window.light_button.setChecked(True)
+    assert window.light.inner.light_on
+    window.light_button.setChecked(False)
+    assert not window.light.inner.light_on
+
+
+def test_panels_get_a_darker_scrim_while_the_light_frame_is_on(app):
+    d = Dashboard()
+    d.resize(600, 400)
+    panel = Panel(d)
+    panel.setGeometry(150, 100, 300, 200)
+    panel.show()
+    alpha = lambda: render_to_image(panel).pixelColor(150, 100).alpha()
+    normal = alpha()
+    d.set_light(True)
+    assert alpha() > normal + 8 and theme.PANEL_SCRIM_ALPHA_LIGHT > theme.PANEL_SCRIM_ALPHA
+
+
+def test_text_stays_legible_over_the_edge_light_inside_panels(app):
+    """With the Light frame on, the brightest background a panel can sit over is the edge light at the panel's edge. Under
+    the darker scrim, small labels must still reach 4.5:1 and the main text 7:1."""
+    d = Dashboard()
+    d.resize(1440, 900)
+    d.set_light(True)
+    img = render_to_image(d)
+    inset = 24                                                           # panels start this far from the dashboard's edge
+    pixels = [(img.pixelColor(x, y).red(), img.pixelColor(x, y).green(), img.pixelColor(x, y).blue())
+              for x in range(inset, 1440 - inset, 8) for y in range(inset, 900 - inset, 8)]
+    dimmed = tuple(c * (1 - theme.PANEL_SCRIM_ALPHA_LIGHT) for c in max(pixels, key=_luminance))
+    grid = QColor(theme.GRID_COLOR)
+    inner = 2 * theme.PANEL_GRID_MAJOR_ALPHA
+    dimmed = tuple(c + (g - c) * inner for c, g in zip(dimmed, (grid.red(), grid.green(), grid.blue())))
+    glass = tuple(round(c + (255 - c) * theme.GLASS_TOP_ALPHA) for c in dimmed)
+    rgb = lambda hex_: (lambda c: (c.red(), c.green(), c.blue()))(QColor(hex_))
+    assert _contrast(rgb(theme.MUTED), glass) >= 4.5
+    assert _contrast(rgb(theme.TEXT), glass) >= 7.0

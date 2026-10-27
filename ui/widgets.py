@@ -18,7 +18,7 @@ import signal_proc
 from models import HRResult
 from ui import theme
 from ui.animated import Scaled, mix_color
-from ui.panels import Lbl, Panel, StatusDot, light_bar, paint_glass
+from ui.panels import Lbl, Panel, StatusDot, light_bar, paint_glass, scrim_for
 
 HAS_READING = ("measuring", "poor_signal")
 
@@ -112,7 +112,7 @@ class VideoTag(QLabel):
         self.setFont(theme.font("mono", theme.SMALL_FONT_PX, 500))
         r, g, b, a = theme.TAG_FILL
         self.setStyleSheet(f"background: rgba({r}, {g}, {b}, {a}); color: {theme.TAG_TEXT}; padding: 7px 9px; "
-                           f"border: 1px solid {theme.TAG_BORDER}; border-radius: 6px;")
+                           f"border: 1px solid {theme.TAG_BORDER}; border-radius: {theme.TAG_RADIUS}px;")
         self.setAttribute(Qt.WA_TransparentForMouseEvents, True)
         self.hide()
 
@@ -162,6 +162,30 @@ class VideoView(QLabel):
     def _render(self) -> None:
         if self._pixmap is not None:
             self.setPixmap(self._pixmap.scaled(self.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
+
+    def paintEvent(self, event) -> None:
+        """Rounded corners, a dark base, then the picture centred (QLabel's own painting cannot clip to a radius)."""
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.setRenderHint(QPainter.SmoothPixmapTransform)
+        rect = QRectF(self.rect())
+        clip = QPainterPath()
+        clip.addRoundedRect(rect, theme.VIDEO_RADIUS, theme.VIDEO_RADIUS)
+        p.setClipPath(clip)
+        p.fillRect(rect, theme.color(theme.VIDEO_BG))
+        pm = self.pixmap()
+        if pm is not None and not pm.isNull():
+            w, h = pm.width() / pm.devicePixelRatio(), pm.height() / pm.devicePixelRatio()
+            p.drawPixmap(QRectF((rect.width() - w) / 2, (rect.height() - h) / 2, w, h), pm, QRectF(pm.rect()))
+        else:
+            p.setPen(theme.color(theme.MUTED))
+            p.setFont(self.font())
+            p.drawText(rect, Qt.AlignCenter, self.text())
+        p.setClipping(False)
+        p.setPen(QPen(theme.color(theme.WHITE, 0.14), 1))
+        p.setBrush(Qt.NoBrush)
+        p.drawRoundedRect(rect.adjusted(0.5, 0.5, -0.5, -0.5), theme.VIDEO_RADIUS, theme.VIDEO_RADIUS)
+        p.end()
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
@@ -564,8 +588,9 @@ class MethodCard(Scaled, QWidget):
 
     def paintEvent(self, event) -> None:
         p, rect = self.begin_paint()
-        paint_glass(p, rect, self.border_color().name())
-        pad_x, pad_y = 18.0, 14.0
+        emphasised = self.active or self._mix > 0.01             # idle cards keep the plain glass rim
+        paint_glass(p, rect, self.border_color().name() if emphasised else None, radius=theme.CARD_RADIUS, scrim=scrim_for(self))
+        pad_x, pad_y = 20.0, 14.0
         label_font = theme.font("mono", theme.SMALL_FONT_PX, 500, 0.12)
         p.setFont(label_font)
         p.setPen(theme.color(theme.WHITE if self.active else theme.MUTED))
@@ -639,6 +664,19 @@ class _Placeholder:
         self.item.setVisible(False)
 
 
+def _add_grid(plot: pg.PlotWidget, xs=(), ys=()) -> list:
+    """Faint grid lines behind a plot's data, like ECG paper. Returned so tests can find them."""
+    lines = []
+    for angle, positions in ((90, xs), (0, ys)):
+        for pos in positions:
+            line = pg.InfiniteLine(pos=pos, angle=angle, pen=pg.mkPen(theme.color(theme.GRID_COLOR, theme.PLOT_GRID_ALPHA), width=1),
+                                   movable=False)
+            line.setZValue(-20)
+            plot.addItem(line, ignoreBounds=True)
+            lines.append(line)
+    return lines
+
+
 class PulsePlot(pg.PlotWidget):
     """The filtered pulse of the whole window: #EDEDED, 1.7 px, over a dashed zero line. No axes."""
 
@@ -652,6 +690,7 @@ class PulsePlot(pg.PlotWidget):
         zero_pen.setDashPattern([3, 6])
         self.zero_line = pg.InfiniteLine(pos=0, angle=0, pen=zero_pen)
         self.addItem(self.zero_line, ignoreBounds=True)
+        self.grid_lines = _add_grid(self, xs=range(0, int(config.WINDOW_SEC) + 1, 3))        # a line every 3 s
         self.curve = self.plot(pen=pg.mkPen(theme.PRIMARY_FILL, width=1.7))
         self.placeholder = _Placeholder(self, "Waiting for signal")
         self.set_result(None)
@@ -720,6 +759,7 @@ class SpectrumPlot(pg.PlotWidget):
         self.setMinimumHeight(60)
         self.setXRange(lo, hi, padding=0)
         self.setYRange(0, 1.15, padding=0)
+        self.grid_lines = _add_grid(self, xs=[b / 60.0 for b in theme.SPECTRUM_TICKS_BPM], ys=(0.29, 0.58, 0.86))
         self.curve = self.plot(pen=pg.mkPen(theme.SPECTRUM_LINE, width=1.5), fillLevel=0, brush=pg.mkBrush(255, 255, 255, 30))
         peak_pen = pg.mkPen(theme.MUTED, width=1)
         peak_pen.setDashPattern([3, 4])

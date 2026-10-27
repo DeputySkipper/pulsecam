@@ -1,14 +1,16 @@
-"""Surfaces: the glass-like Panel, the dashboard background, the top bar, and the small label helper.
+"""Surfaces: the glass Panel, the dashboard background, the top bar, and the small label helper.
 
-Qt has no backdrop blur, so a Panel approximates the reference's glass with a translucent fill, a 1 px border and a
-faint highlight along its top edge, all painted in paintEvent.
+Qt has no backdrop blur, so the glass is painted: the background is a smooth field of soft colours (so there is nothing
+sharp to blur), and a Panel is a translucent gradient fill, a bright-to-dim rim and a thin specular highlight along its
+top edge.
 """
 from __future__ import annotations
 
 from collections import deque
 
-from PySide6.QtCore import QPointF, QRectF, QSize, Qt
-from PySide6.QtGui import QFontMetrics, QPainter, QPainterPath, QPen, QRadialGradient
+from PySide6.QtCore import QPoint, QPointF, QRectF, QSize, Qt
+from PySide6.QtGui import (QBrush, QColor, QFontMetrics, QLinearGradient, QPainter, QPainterPath, QPen, QPixmap,
+                           QRadialGradient)
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 import config
@@ -24,7 +26,7 @@ def camera_text(source: str, fps: float | None) -> str:
 
 
 class Lbl(QLabel):
-    """Small uppercase mono label (the reference's .lbl): 11 px, weight 500, letter-spacing .12 em, muted."""
+    """Small uppercase monospace label: 11 px, weight 500, letter-spacing .12 em, muted (the instrument-panel look)."""
 
     def __init__(self, text: str = "", color: str = theme.MUTED, px: int = theme.SMALL_FONT_PX, parent=None):
         super().__init__(text.upper(), parent)
@@ -38,29 +40,97 @@ class Lbl(QLabel):
         self.setStyleSheet(f"color: {color}; background: transparent;")
 
 
-def paint_glass(p: QPainter, rect: QRectF, border: str = theme.BORDER) -> None:
-    """The glass look: translucent white fill, a faint highlight along the top edge, a 1 px border, radius 12."""
-    r = theme.RADIUS
+def paint_glass(p: QPainter, rect: QRectF, border: str | None = None, radius: float | None = None,
+                origin: QPointF | None = None, scrim: float | None = None) -> None:
+    """Liquid glass: a translucent fill that is brighter at the top, a rim that fades from bright (top left) to dim
+    (bottom right), and a thin specular highlight along the top edge. `border` (a colour name) overlays a stronger rim,
+    used for an active or hovered card; None keeps the plain glass rim. `origin` is the panel's top left in the window's
+    coordinates; when given, the measurement grid is drawn inside the panel on the same lines as outside it."""
+    r = theme.RADIUS if radius is None else radius
+    r = min(r, rect.height() / 2 - 0.5, rect.width() / 2 - 0.5)
     body = rect.adjusted(0.5, 0.5, -0.5, -0.5)
-    p.setPen(Qt.NoPen)
-    p.setBrush(theme.color(theme.WHITE, theme.PANEL_ALPHA))
-    p.drawRoundedRect(body, r, r)
-    # highlight: the rounded outline one pixel inside, kept to the top band so only the top edge and corners show
+    path = QPainterPath()
+    path.addRoundedRect(body, r, r)
+    white = lambda a: theme.color(theme.WHITE, a)
+
+    p.fillPath(path, theme.color("#000000", theme.PANEL_SCRIM_ALPHA if scrim is None else scrim))    # frosting: dims what is behind
+    if origin is not None:
+        _paint_panel_grid(p, path, rect, origin)
+
+    fill = QLinearGradient(body.topLeft(), body.bottomLeft())
+    fill.setColorAt(0.0, white(theme.GLASS_TOP_ALPHA))
+    fill.setColorAt(1.0, white(theme.GLASS_BOTTOM_ALPHA))
+    p.fillPath(path, QBrush(fill))
+
+    rim = QLinearGradient(body.topLeft(), body.bottomRight())
+    rim.setColorAt(0.0, white(theme.GLASS_RIM_TOP))
+    rim.setColorAt(0.5, white((theme.GLASS_RIM_TOP + theme.GLASS_RIM_BOTTOM) / 2.4))
+    rim.setColorAt(1.0, white(theme.GLASS_RIM_BOTTOM))
+    p.setBrush(Qt.NoBrush)
+    p.setPen(QPen(QBrush(rim), 1.2))
+    p.drawPath(path)
+
+    # specular highlight: the rim again, only along the top band, fading to nothing towards both ends
+    spec = QLinearGradient(body.left() + r, 0, body.right() - r, 0)
+    spec.setColorAt(0.0, white(0.0))
+    spec.setColorAt(0.5, white(theme.GLASS_SPECULAR))
+    spec.setColorAt(1.0, white(0.0))
     p.save()
-    clip = QPainterPath()
-    clip.addRect(QRectF(rect.left(), rect.top(), rect.width(), r + 1))
-    p.setClipPath(clip)
-    p.setPen(QPen(theme.color(theme.WHITE, theme.PANEL_TOP_ALPHA), 1))
-    p.setBrush(Qt.NoBrush)
-    p.drawRoundedRect(body.adjusted(0, 1, 0, 0), r - 1, r - 1)
+    band = QPainterPath()
+    band.addRect(QRectF(rect.left(), rect.top(), rect.width(), min(r * 0.55, 10.0)))
+    p.setClipPath(band)
+    p.setPen(QPen(QBrush(spec), 1.6))
+    p.drawPath(path)
     p.restore()
-    p.setPen(QPen(theme.color(border), 1))
-    p.setBrush(Qt.NoBrush)
-    p.drawRoundedRect(body, r, r)
+
+    if r >= 10 and body.width() > 2 * r + theme.NOTCH_LEN:                  # the accent notch: a short cyan segment
+        p.setPen(QPen(theme.color(theme.ACCENT, 0.85), 1.8, Qt.SolidLine, Qt.RoundCap))
+        p.drawLine(QPointF(body.left() + r + 6, body.top() + 0.9), QPointF(body.left() + r + 6 + theme.NOTCH_LEN, body.top() + 0.9))
+
+    if border:
+        p.setPen(QPen(QColor(border), 1.4))
+        p.drawPath(path)
+
+
+def _paint_panel_grid(p: QPainter, path: QPainterPath, rect: QRectF, origin: QPointF) -> None:
+    """The window's grid inside a panel: the same lines (multiples of GRID_MINOR_PX in window coordinates), quieter, with
+    no registration crosses, clipped to the panel's rounded shape."""
+    step, every = theme.GRID_MINOR_PX, theme.GRID_MAJOR_EVERY
+    px = 1.0 / max(p.device().devicePixelRatioF(), 1.0)
+    p.save()
+    p.setClipPath(path)
+    first_col, first_row = int(origin.x() // step), int(origin.y() // step)
+    for i in range(first_col, int((origin.x() + rect.width()) // step) + 1):
+        a = theme.PANEL_GRID_MAJOR_ALPHA if i % every == 0 else theme.PANEL_GRID_MINOR_ALPHA
+        p.fillRect(QRectF(i * step - origin.x(), rect.top(), px, rect.height()), theme.color(theme.GRID_COLOR, a))
+    for j in range(first_row, int((origin.y() + rect.height()) // step) + 1):
+        a = theme.PANEL_GRID_MAJOR_ALPHA if j % every == 0 else theme.PANEL_GRID_MINOR_ALPHA
+        p.fillRect(QRectF(rect.left(), j * step - origin.y(), rect.width(), px), theme.color(theme.GRID_COLOR, a))
+    p.restore()
+
+
+def dashboard_of(widget: QWidget) -> "Dashboard | None":
+    parent = widget.parentWidget()
+    while parent is not None and not isinstance(parent, Dashboard):
+        parent = parent.parentWidget()
+    return parent
+
+
+def window_origin(widget: QWidget) -> QPointF | None:
+    """The widget's top left in the coordinates of the Dashboard it sits on, or None when it is not on one."""
+    dash = dashboard_of(widget)
+    return None if dash is None else QPointF(widget.mapTo(dash, QPoint(0, 0)))
+
+
+def scrim_for(widget: QWidget) -> float | None:
+    """The darker scrim while the Light frame is on (its edge light is behind the panels), else None for the normal one."""
+    dash = dashboard_of(widget)
+    return theme.PANEL_SCRIM_ALPHA_LIGHT if dash is not None and dash.light_on else None
 
 
 class Panel(QFrame):
-    """Translucent rounded panel: fill white at 3.5%, 1 px border, radius 12, a faint highlight along the top edge."""
+    """Translucent glass panel (see paint_glass)."""
+    radius: float | None = None                  # None: theme.RADIUS
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -69,28 +139,121 @@ class Panel(QFrame):
     def paintEvent(self, event) -> None:
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
-        paint_glass(p, QRectF(self.rect()))
+        paint_glass(p, QRectF(self.rect()), radius=self.radius, origin=window_origin(self), scrim=scrim_for(self))
         p.end()
 
 
 class Dashboard(QWidget):
-    """Window background: #0A0A0A with a soft elliptical highlight at the top right (the reference's stage)."""
-    HIGHLIGHT_RADII = (900.0, 500.0)           # px, at 70% of the width and -10% of the height
-    HIGHLIGHT_CENTER = (0.70, -0.10)
+    """Window background: a deep ink gradient with soft colour fields (blue, violet, teal, pink) for the glass to sit
+    over. It is drawn once per size into a pixmap and blitted, because every translucent panel on top repaints it."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._cache: QPixmap | None = None
+        self._cache_key: tuple | None = None
+        self._light = False
+
+    @property
+    def light_on(self) -> bool:
+        return self._light
+
+    def set_light(self, on: bool) -> None:
+        """Light frame on: add the soft edge light (white at the rim, fading into the dark, rounded corners)."""
+        if on != self._light:
+            self._light = on
+            self._cache = None
+            self.update()
+
+    def resizeEvent(self, event) -> None:
+        self._cache = None
+        super().resizeEvent(event)
+
+    def _render_background(self) -> QPixmap:
+        dpr = self.devicePixelRatioF()
+        w, h = max(self.width(), 1), max(self.height(), 1)
+        pm = QPixmap(int(w * dpr), int(h * dpr))
+        pm.setDevicePixelRatio(dpr)
+        p = QPainter(pm)
+        p.setRenderHint(QPainter.Antialiasing)
+        base = QLinearGradient(0, 0, w * 0.6, h)
+        base.setColorAt(0.0, theme.color(theme.BG_TOP))
+        base.setColorAt(0.55, theme.color(theme.BG))
+        base.setColorAt(1.0, theme.color(theme.BG))
+        p.fillRect(QRectF(0, 0, w, h), QBrush(base))
+        reach = float(max(w, h))
+        for cx, cy, rad, colour, alpha in theme.AURORA:
+            glow = QRadialGradient(cx * w, cy * h, rad * reach)
+            for stop, k in ((0.0, 1.0), (0.35, 0.55), (0.7, 0.16), (1.0, 0.0)):      # a smooth, long falloff: no edge to see
+                glow.setColorAt(stop, theme.color(colour, alpha * k))
+            p.fillRect(QRectF(0, 0, w, h), QBrush(glow))
+        p.drawPixmap(0, 0, self._render_grid(w, h, dpr))
+        if self._light:
+            p.drawPixmap(0, 0, self._render_edge_light(w, h, dpr))
+        p.end()
+        return pm
+
+    @staticmethod
+    def _render_edge_light(w: int, h: int, dpr: float) -> QPixmap:
+        """White that is solid at the edge and fades smoothly inwards around a rounded rectangle. Computed from the signed
+        distance to that rectangle at half resolution and scaled up (the result is smooth, so the scaling is invisible)."""
+        import numpy as np
+        from PySide6.QtGui import QImage
+        scale = 0.5 * dpr
+        gw, gh = max(int(w * scale), 2), max(int(h * scale), 2)
+        xs, ys = (np.arange(gw) + 0.5) / scale, (np.arange(gh) + 0.5) / scale
+        inset, radius, fade = theme.LIGHT_GLOW_EDGE_PX, theme.LIGHT_GLOW_RADIUS, theme.LIGHT_GLOW_FADE_PX
+        qx = np.abs(xs[None, :] - w / 2) - (w / 2 - inset - radius)
+        qy = np.abs(ys[:, None] - h / 2) - (h / 2 - inset - radius)
+        sdf = np.hypot(np.maximum(qx, 0), np.maximum(qy, 0)) + np.minimum(np.maximum(qx, qy), 0) - radius   # < 0 inside
+        t = np.clip(-sdf / fade, 0.0, 1.0)
+        alpha = np.where(sdf >= 0, 1.0, (1.0 - t) ** theme.LIGHT_GLOW_FALLOFF)                               # bright rim, quick fall
+        rgba = np.empty((gh, gw, 4), dtype=np.uint8)
+        rgba[..., :3] = 255
+        rgba[..., 3] = np.round(alpha * 255).astype(np.uint8)
+        image = QImage(rgba.data, gw, gh, gw * 4, QImage.Format_RGBA8888).copy()
+        pm = QPixmap.fromImage(image.scaled(int(w * dpr), int(h * dpr), Qt.IgnoreAspectRatio, Qt.SmoothTransformation))
+        pm.setDevicePixelRatio(dpr)
+        return pm
+
+    @staticmethod
+    def _render_grid(w: int, h: int, dpr: float) -> QPixmap:
+        """The measurement grid on a transparent pixmap: lines one device pixel wide, registration crosses at the strong
+        intersections, then faded towards the edges with a radial mask (so it frames the content, never competes)."""
+        grid = QPixmap(int(w * dpr), int(h * dpr))
+        grid.fill(Qt.transparent)
+        grid.setDevicePixelRatio(dpr)
+        g = QPainter(grid)
+        px = 1.0 / dpr
+        step, every = theme.GRID_MINOR_PX, theme.GRID_MAJOR_EVERY
+        cols, rows = int(w / step) + 1, int(h / step) + 1
+        for i in range(cols):
+            a = theme.GRID_MAJOR_ALPHA if i % every == 0 else theme.GRID_MINOR_ALPHA
+            g.fillRect(QRectF(i * step, 0, px, h), theme.color(theme.GRID_COLOR, a))
+        for j in range(rows):
+            a = theme.GRID_MAJOR_ALPHA if j % every == 0 else theme.GRID_MINOR_ALPHA
+            g.fillRect(QRectF(0, j * step, w, px), theme.color(theme.GRID_COLOR, a))
+        arm = theme.GRID_CROSS_ARM
+        cross = theme.color(theme.GRID_COLOR, theme.GRID_CROSS_ALPHA)
+        for i in range(0, cols, every):
+            for j in range(0, rows, every):
+                x, y = i * step, j * step
+                g.fillRect(QRectF(x - arm, y, 2 * arm + px, px), cross)
+                g.fillRect(QRectF(x, y - arm, px, 2 * arm + px), cross)
+        g.setCompositionMode(QPainter.CompositionMode_DestinationIn)
+        mask = QRadialGradient(0.5 * w, 0.40 * h, 0.78 * max(w, h))
+        for stop, k in ((0.0, 1.0), (0.55, 0.62), (1.0, theme.GRID_FADE_MIN)):
+            mask.setColorAt(stop, QColor(0, 0, 0, round(255 * k)))
+        g.fillRect(QRectF(0, 0, w, h), QBrush(mask))
+        g.end()
+        return grid
 
     def paintEvent(self, event) -> None:
+        key = (self.width(), self.height(), self.devicePixelRatioF())
+        if self._cache is None or self._cache_key != key:
+            self._cache, self._cache_key = self._render_background(), key
         p = QPainter(self)
-        p.fillRect(self.rect(), theme.color(theme.BG))
-        rx, ry = self.HIGHLIGHT_RADII
-        cx, cy = self.width() * self.HIGHLIGHT_CENTER[0], self.height() * self.HIGHLIGHT_CENTER[1]
-        grad = QRadialGradient(0, 0, ry)
-        grad.setColorAt(0.0, theme.color(theme.BG_HIGHLIGHT))
-        grad.setColorAt(0.7, theme.color(theme.BG))
-        grad.setColorAt(1.0, theme.color(theme.BG))
-        sx = rx / ry
-        p.translate(cx, cy)
-        p.scale(sx, 1.0)
-        p.fillRect(QRectF(-cx / sx, -cy, self.width() / sx, self.height()), grad)
+        p.setClipRect(event.rect())                      # only the damaged part is drawn; the pixmap is in logical units
+        p.drawPixmap(0, 0, self._cache)
         p.end()
 
 

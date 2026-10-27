@@ -9,6 +9,7 @@ Log for the work in `docs/AI_HANDOFF.md`. Rules: one phase at a time, stop at ea
 | H2 HMM: Viterbi and forward filter | done (confirmed) | see below |
 | H3 Evaluation | done (confirmed) | see below |
 | H4 Figure and write-up | gate met, awaiting confirmation | see below |
+| H5 Review fixes | done | see below |
 
 ## H0 log (22 Oct 2026)
 
@@ -61,8 +62,19 @@ Honest reading:
 ## H4 log (22 Oct 2026)
 
 - `python tools/hmm_track.py figure` (run `evaluate` first) writes `results/hmm/hmm_230706.png`: CHROM spectrogram of clip 230706 (time x BPM, colour = power normalised to each window's maximum) with the raw peak, the app's `bpm_smooth`, the Viterbi track (sigma = 3) and the Apple Watch readings (each minute as a band from its lowest to highest reading, with the median dashed, because the readings carry only the minute).
-- `matplotlib>=3.8` added to `requirements.txt` with a comment that only the tools use it (3.11.2 installed in `.venv`). Smoke test added: `pytest -q` 137 passed (skips if `evaluate` has not been run).
+- `matplotlib>=3.8` added to `requirements.txt` with a comment that only the tools use it (3.11.2 installed in `.venv`). Smoke test added: `pytest -q` 137 passed (skips if `evaluate` has not been run). **Correction (H5):** it did not skip when `matplotlib` was missing; it failed. Fixed with `pytest.importorskip`.
 - What the figure shows: the raw peak sits on the watch band from about 20 to 44 s, then drops to 76-78 BPM for several seconds (44-52 s and 62-70 s), where the spectrum has a second, lower ridge. The Viterbi track dips toward those ridges too (to about 74-79 BPM) but passes through the watch band for most of the rest of the clip. The HMM does not remove those dips on this clip; the figure is the honest picture of that.
+
+## H5 log: review fixes (27 Oct 2026)
+
+Found while reviewing and re-running the H0 to H4 work. No number in `hmm_results.csv` or any `.npz` changed; only `hmm_table.md` gained two note lines (below).
+
+- **Figure test failed without matplotlib.** `test_figure_is_written` only skipped when `evaluate` had not been run. Now `pytest.importorskip("matplotlib")` first (checked with the package hidden: skips).
+- **Output paths were bound at import time.** `export_spectra`, `load_spectra`, `evaluate_main`, `evaluate_secondary`, `evaluate_all` and `plot_figure` had `RECORDINGS` / `OUT_DIR` as default arguments, so nothing could redirect them. They now default to `None` and look the module values up when called. `python tools/hmm_track.py <export|evaluate|figure> --recordings DIR --out DIR` runs the tool without touching `results/hmm/`.
+- **Gaps between windows were treated as 1 s steps** (listed as a caveat in H2, and a blocker for any live use). `window_steps(t_center)` now gives the whole seconds between consecutive windows and the transition across a gap is `A^k` (still row-stochastic, flatter, so a long gap forgets the old rate). Viterbi, the forward filter and `track` take an optional `steps`; `sources()` passes it. Every step on the recorded clips is 1, so the results are unchanged (verified: `hmm_results.csv` and all 21 `.npz` files identical). On a synthetic 15 s gap with a rate change from 80 to 100 BPM, the first window after the gap is at 100 with the fix and at 82 without.
+- **Two limitations that were true but unwritten** are now in `track()`'s docstring and in `hmm_table.md`: consecutive windows share 14 of 15 s of data but are treated as independent evidence; and the forward filter's max posterior (about 0.15) is small because a spectral peak spans several 1 BPM bins, so it ranks windows by reliability but is not the probability of being right (70 to 80% of windows are within 10 BPM of the watch). Posterior mass within +-3 or +-5 BPM was tried as a confidence measure and helped only slightly (CHROM AUC 0.85 to 0.87), within the noise of one clip, so the headline measure is unchanged.
+- **New tests (12):** step counting, gap-following (and that the old behaviour does not follow), steps of one equal no steps, step validation, flattening of `A^k`, Viterbi and forward with gaps against brute force, paths looked up at call time, the CLI flags, and a full reproduction of the committed `hmm_results.csv` from the means CSVs in a scratch folder. With gap handling disabled, 5 of them fail.
+- **UI test (not the HMM):** `test_layout_minimum_fits_the_minimum_window_so_nothing_is_squeezed` measured the layout's size hint before the stylesheet was polished (1116 px; 1039 px once events are processed, well inside the 1100 px minimum). It now calls `processEvents()` first. The layout itself was fine.
 
 ## Summary for the AI course report
 

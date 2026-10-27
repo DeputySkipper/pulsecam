@@ -7,7 +7,7 @@ control so the enlarged drawing never clips. With `theme.ANIMATIONS = False` the
 from __future__ import annotations
 
 from PySide6.QtCore import QEasingCurve, QPointF, QRectF, QSize, Qt, QVariantAnimation
-from PySide6.QtGui import QColor, QFontMetrics, QPainter, QPainterPath, QPen
+from PySide6.QtGui import QBrush, QColor, QFontMetrics, QLinearGradient, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QComboBox, QPushButton, QSizePolicy
 
 from ui import theme
@@ -200,30 +200,61 @@ PAD_X = 16                                                  # horizontal padding
 GLYPH_GAP = 8
 
 
+def _white(alpha: float) -> QColor:
+    return theme.color(theme.WHITE, alpha)
+
+
+def _lerp(a: float, b: float, t: float) -> float:
+    return a + (b - a) * t
+
+
 def _colors(primary: bool, enabled: bool, checked: bool, mix: float) -> tuple[QColor, QColor, QColor]:
-    """(fill, border, text) for the control's current state."""
+    """(fill, border, text) for the control's current state. Glass controls are white at a low alpha; the primary
+    control is a solid light pill."""
     if primary:
         fill = mix_color(theme.PRIMARY_FILL, theme.PRIMARY_FILL_HOVER, mix)
         return fill, QColor(fill), QColor(theme.PRIMARY_TEXT)
     if not enabled:
-        return QColor(theme.BTN_FILL), theme.color(theme.BTN_BORDER, 0.6), QColor(theme.DISABLED_TEXT)
-    fill = mix_color(theme.BTN_FILL, theme.BTN_FILL_HOVER, mix)
-    border = mix_color(theme.BTN_BORDER, theme.BTN_BORDER_HOVER, mix)
+        return _white(0.04), _white(0.10), QColor(theme.DISABLED_TEXT)
     if checked:
-        fill, border = QColor(theme.BTN_FILL_HOVER), QColor(theme.CHECKED_BORDER)
-    return fill, border, QColor(theme.TEXT)
+        return _white(theme.BTN_ALPHA_CHECKED), theme.color(theme.CHECKED_BORDER, 0.85), QColor(theme.TEXT)
+    return (_white(_lerp(theme.BTN_ALPHA, theme.BTN_ALPHA_HOVER, mix)),
+            _white(_lerp(theme.BTN_RIM, theme.BTN_RIM_HOVER, mix)), QColor(theme.TEXT))
 
 
-def _draw_body(p: QPainter, rect: QRectF, fill: QColor, border: QColor, focus: bool) -> None:
-    r = theme.CONTROL_RADIUS
+def _draw_body(p: QPainter, rect: QRectF, fill: QColor, border: QColor, focus: bool, primary: bool = False) -> None:
+    """A rounded rectangle (radius CONTROL_RADIUS) with a soft sheen across its top half."""
+    body = rect.adjusted(0.5, 0.5, -0.5, -0.5)
+    r = min(float(theme.CONTROL_RADIUS), body.height() / 2)
+    path = QPainterPath()
+    path.addRoundedRect(body, r, r)
+    if primary:                                             # a faint glow in the margin reserved for the hover scale
+        for grow, alpha in ((1.0, 0.16), (2.0, 0.08)):          # stays well inside ANIM_MARGIN even at full hover scale
+            glow = QPainterPath()
+            glow.addRoundedRect(body.adjusted(-grow, -grow, grow, grow), r + grow, r + grow)
+            p.setPen(QPen(_white(alpha), 1.2))
+            p.setBrush(Qt.NoBrush)
+            p.drawPath(glow)
     if focus:                                               # 2 px ring, 2 px outside the control
-        ring = QPen(QColor(theme.FOCUS), 2)
-        p.setPen(ring)
+        p.setPen(QPen(QColor(theme.FOCUS), 2))
         p.setBrush(Qt.NoBrush)
-        p.drawRoundedRect(rect.adjusted(-2, -2, 2, 2), r + 2, r + 2)
-    p.setPen(QPen(border, 1))
-    p.setBrush(fill)
-    p.drawRoundedRect(rect.adjusted(0.5, 0.5, -0.5, -0.5), r - 0.5, r - 0.5)
+        ring = QPainterPath()
+        ring.addRoundedRect(rect.adjusted(-2, -2, 2, 2), r + 2, r + 2)
+        p.drawPath(ring)
+    if primary:
+        grad = QLinearGradient(body.topLeft(), body.bottomLeft())
+        grad.setColorAt(0.0, fill)
+        grad.setColorAt(1.0, mix_color(fill.name(), theme.PRIMARY_FILL_LOW, 0.85))
+        p.fillPath(path, QBrush(grad))
+    else:
+        p.fillPath(path, fill)
+        sheen = QLinearGradient(body.topLeft(), body.bottomLeft())
+        sheen.setColorAt(0.0, _white(0.16))
+        sheen.setColorAt(0.55, _white(0.0))
+        p.fillPath(path, QBrush(sheen))
+        p.setPen(QPen(border, 1))
+        p.setBrush(Qt.NoBrush)
+        p.drawPath(path)
 
 
 class AnimButton(Scaled, QPushButton):
@@ -272,7 +303,7 @@ class AnimButton(Scaled, QPushButton):
     def paintEvent(self, event) -> None:
         p, rect = self.begin_paint()
         fill, border, text_color = _colors(self.primary, self.isEnabled(), self.isChecked(), self._mix)
-        _draw_body(p, rect, fill, border, self._kb_focus and self.hasFocus())
+        _draw_body(p, rect, fill, border, self._kb_focus and self.hasFocus(), primary=self.primary)
         glyph = self.current_glyph()
         fm = QFontMetrics(self.font())
         text_w = fm.horizontalAdvance(self.text()) if self.text() else 0

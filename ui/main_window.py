@@ -37,7 +37,8 @@ VIDEO_FILTER = "Video (*.mkv *.avi *.mp4 *.mov *.m4v);;All files (*)"
 
 
 class LightFrame(QWidget):
-    """Outer frame: white (on) or the app background (off). On adds LIGHT_FRAME_PX of white around the dashboard."""
+    """Outer frame: white (on) or the app background (off). On adds LIGHT_FRAME_PX of white around the dashboard, and the
+    dashboard's edge light (rounded, fading into the dark) so the white and the screen read as one soft glow."""
 
     def __init__(self, inner: QWidget):
         super().__init__()
@@ -45,6 +46,7 @@ class LightFrame(QWidget):
         self.setAttribute(Qt.WA_StyledBackground, True)
         layout = QVBoxLayout(self)
         layout.addWidget(inner)
+        self.inner = inner
         self.on = False
         self.set_on(config.LIGHT_FRAME_DEFAULT)
 
@@ -53,6 +55,8 @@ class LightFrame(QWidget):
         margin = config.LIGHT_FRAME_PX if on else 0
         self.layout().setContentsMargins(margin, margin, margin, margin)
         self.setStyleSheet(f"#lightFrame {{ background: {theme.LIGHT_FRAME if on else theme.BG}; }}")
+        if hasattr(self.inner, "set_light"):
+            self.inner.set_light(on)                         # the dashboard adds a soft edge light that joins the white frame
 
 
 class MainWindow(QMainWindow):

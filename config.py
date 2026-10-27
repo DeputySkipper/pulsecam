@@ -12,12 +12,18 @@ DETECT_EVERY_N = 3            # frames
 BOX_EMA_ALPHA = 0.3
 FACE_LOST_SEC = 1.0
 MOTION_THRESH = 0.10          # fraction of face width
-FREEZE_ROI = True             # lock the face box after ROI_LOCK_SEC so ROI jitter cannot enter the signal
-ROI_LOCK_SEC = 2.0            # detect + EMA-smooth for this long after (re)acquiring the face, then freeze
-RELOCK_CHECK_SEC = 1.0        # while frozen, compare a fresh detection against the frozen box this often
-RELOCK_MOVE_FRAC = 0.08       # re-lock if the face centre moved more than this fraction of box width
-RELOCK_CONFIRM_CHECKS = 2     # consecutive checks that must agree on the move before re-locking
-SEAM_MATCH_SEC = 2.0          # on a re-lock the buffer is kept; the new segment is gain-matched over this long (about 2.4 pulse cycles)
+FREEZE_ROI = True             # hold the measurement box still within a dead band, glide to the face beyond it (see face_roi.py)
+ROI_LOCK_SEC = 2.0            # the first lock follows the face for at least this long before it settles
+RELOCK_MOVE_FRAC = 0.05       # dead band: the box starts gliding when the face is further than this fraction of the box width away
+ROI_SETTLE_FRAC = 0.02        # ...and settles once it is within this fraction
+ROI_SETTLE_HOLD_SEC = 0.8     # the settle flag is raised once the box has stayed put this long (a new move first cancels it: one long follow, not many)
+ROI_RECENTRE_FRAC = 0.035     # an offset between this and the dead band is corrected gently (no flags) once the face has been still
+ROI_GLIDE_GAIN = 0.5          # while gliding, each detection closes this fraction of the gap
+ROI_STILL_SEC = 0.8           # a leftover offset (between settle and dead band) is corrected once the face has been still this long
+ROI_STILL_FRAC = 0.025        # "still": the tracked face centre within this fraction of the box width
+TRACK_MEDIAN_N = 5            # the live face box is the median of this many detections (one wild detection cannot move it)...
+TRACK_EMA = 0.5               # ...smoothed with this weight on the newest
+SEAM_MATCH_SEC = 2.0          # on a (re)lock the buffer is kept; the new segment is gain-matched over this long (about 2.4 pulse cycles)
 SEAM_MIN_SEC = 0.5            # less than this much earlier data: nothing to match against
 USE_SKIN_MASK = False         # Should item (S2), not built; needs approval
 
@@ -42,7 +48,7 @@ SNR_HALF_WIDTH_HZ = 0.15
 SNR_GOOD_DB, SNR_FAIR_DB = 2.0, 0.0   # fair at 0 dB: above white-noise p99; good at +2 dB (offline sweep on a ground-truth clip)
 SMOOTH_K = 5
 MAX_JUMP_BPM = 15
-HOLD_MAX_SEC = 5.0            # poor quality longer than this: drop the held BPM and the smoothing history
+HOLD_MAX_SEC = 10.0           # poor quality longer than this: drop the held BPM and the smoothing history
 CONFIRM_ESTIMATES = 3         # a number is first displayed after this many consecutive non-poor estimates...
 CONFIRM_AGREE_BPM = 5.0       # ...whose spread (max - min) is within this
 JUMP_PERSIST = 5              # consecutive agreeing updates needed to accept a jump
@@ -80,7 +86,7 @@ RGB_MAX = 255.0
 # Scenario cycle: (phase, seconds). Exercises every UI state:
 #   measuring: face + clean pulse (10 s warm-up first, then readings)   dim: same, but darker (low-light hint)
 #   poor: pulse buried in strong in-band interference (long enough for the hold limit to show "--")   no_face: no face
-MOCK_SCENARIO = (("measuring", 30.0), ("dim", 8.0), ("poor", 14.0), ("no_face", 4.0))
+MOCK_SCENARIO = (("measuring", 30.0), ("dim", 8.0), ("poor", 26.0), ("no_face", 4.0))
 MOCK_DIM_GAIN = 0.30          # brightness multiplier in the dim phase
 MOCK_RAMP_SEC = 1.5           # brightness changes ramp over this long (no steps in the signal)
 MOCK_POOR_TONES = (0.95, 3.0, 22)   # poor phase: flat-spectrum in-band interference (lo Hz, hi Hz, count), so no peak dominates

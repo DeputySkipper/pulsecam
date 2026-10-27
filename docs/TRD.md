@@ -193,7 +193,7 @@ Let `C` be the `(N, 3)` uniformly resampled R, G, B. Guard every division (means
 - `bpm_smooth` = median of the last `SMOOTH_K` accepted estimates whose quality is not `poor`. The first number after a reset or a stale clear needs `CONFIRM_ESTIMATES` consecutive non-poor estimates agreeing within `CONFIRM_AGREE_BPM` (a poor window breaks the run).
 - On `poor`: keep showing the last good value, greyed out, with the state "Hold still". If no estimate has been accepted for `HOLD_MAX_SEC`, `bpm_smooth` becomes None (UI shows "--") and the history clears.
 - Jump rejection (approved): ignore a new estimate more than `MAX_JUMP_BPM` from `bpm_smooth` unless `JUMP_PERSIST` consecutive held-back estimates agree with each other.
-- ROI lock (`FREEZE_ROI`): detect and EMA-smooth for `ROI_LOCK_SEC`, then freeze the box. While frozen, `RELOCK_CONFIRM_CHECKS` consecutive checks (every `RELOCK_CHECK_SEC`) that see the face centre move more than `RELOCK_MOVE_FRAC` of the box width and agree, or a lost face, start a new lock. `FrameSample.relock` marks the lock start and the freeze. **A re-lock does not reset the buffer.** The estimator keeps it and gain-matches the new segment: per channel, the mean of the new segment (provisional while it is shorter than `SEAM_MATCH_SEC`, final after) is scaled to continue from the mean of the last `SEAM_MATCH_SEC` before the seam, so the level step the ROI jump causes never reaches the filter. Matching uses 2 s windows (about 2.4 pulse cycles) because a short window's partial-cycle bias is as large as the pulse itself. Face loss and sample gaps still reset the buffer.
+- ROI tracking (`FREEZE_ROI`): the face is tracked continuously (median of the last `TRACK_MEDIAN_N` detections, then an EMA of `TRACK_EMA`; this is the grey box in the preview). The measurement box (the accent ROIs) is held perfectly still while that live face stays within `RELOCK_MOVE_FRAC` of the box width of it, so detector jitter never enters the signal. Beyond that dead band, or after a lost face, the box glides to the face (`ROI_GLIDE_GAIN` of the gap per detection) until within `ROI_SETTLE_FRAC`. A leftover offset above `ROI_RECENTRE_FRAC` is corrected gently, without flags, once the face has been still for `ROI_STILL_SEC`. `FrameSample.relock` marks the start of a real move and, once the box has stayed settled for `ROI_SETTLE_HOLD_SEC`, its settle (continuous motion is one long follow, not many seams). **A re-lock does not reset the buffer.** The estimator keeps it and gain-matches the new segment: per channel, the mean of the new segment (provisional while it is shorter than `SEAM_MATCH_SEC`, final after) is scaled to continue from the mean of the last `SEAM_MATCH_SEC` before the seam, so the level step the ROI jump causes never reaches the filter. Matching uses 2 s windows (about 2.4 pulse cycles) because a short window's partial-cycle bias is as large as the pulse itself. Face loss and sample gaps still reset the buffer.
 
 ## 6. Sources (`capture.py`)
 
@@ -216,10 +216,11 @@ Let `C` be the `(N, 3)` uniformly resampled R, G, B. Guard every division (means
 | `FACE_LOST_SEC` | 1.0 | |
 | `MOTION_THRESH` | 0.10 | fraction of face width |
 | `FREEZE_ROI` | True | lock the box after `ROI_LOCK_SEC` |
-| `ROI_LOCK_SEC` | 2.0 | |
-| `RELOCK_CHECK_SEC` | 1.0 | |
-| `RELOCK_MOVE_FRAC` | 0.08 | of box width |
-| `RELOCK_CONFIRM_CHECKS` | 2 | consecutive agreeing checks |
+| `ROI_LOCK_SEC` | 2.0 | first lock |
+| `RELOCK_MOVE_FRAC` | 0.05 | dead band, of box width |
+| `ROI_SETTLE_FRAC`, `ROI_GLIDE_GAIN`, `ROI_SETTLE_HOLD_SEC` | 0.02, 0.5, 0.8 | glide end, glide speed, delay before the settle flag |
+| `ROI_RECENTRE_FRAC`, `ROI_STILL_SEC`, `ROI_STILL_FRAC` | 0.035, 0.8, 0.025 | gentle flag-less re-centre |
+| `TRACK_MEDIAN_N`, `TRACK_EMA` | 5, 0.5 | live face box smoothing |
 | `SEAM_MATCH_SEC`, `SEAM_MIN_SEC` | 2.0, 0.5 | match window across a re-lock; less earlier data than the minimum: nothing to match |
 | `ROI_SET` | "cheeks" | or "all" (forehead + cheeks) |
 | `USE_SKIN_MASK` | False | Should item, not built |
@@ -236,7 +237,7 @@ Let `C` be the `(N, 3)` uniformly resampled R, G, B. Guard every division (means
 | `SMOOTH_K` | 5 | |
 | `MAX_JUMP_BPM` | 15 | |
 | `JUMP_PERSIST` | 5 | agreeing held-back estimates needed to accept a jump |
-| `HOLD_MAX_SEC` | 5.0 | no accepted estimate for this long: drop the held BPM |
+| `HOLD_MAX_SEC` | 10.0 | no accepted estimate for this long: drop the held BPM |
 | `UPDATE_SEC` | 1.0 | |
 | `PLOT_REFRESH_MS` | 100 | |
 | `LIGHT_FRAME_PX` | 100 | margin of white when the light frame is on |

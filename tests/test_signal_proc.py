@@ -176,8 +176,9 @@ def test_smoothing_is_median_of_good_estimates_and_held_on_poor():
 
     # Feed noise and estimate once per UPDATE_SEC. A poor window either holds the previous smoothed value or,
     # once nothing has been accepted for HOLD_MAX_SEC, drops it. It never invents a number.
-    noise = 0.5 + np.random.default_rng(7).normal(0, 0.01, rgb.shape)
-    t2 = t + t[-1] + 1.0 / config.FS
+    n_noise = int((config.HOLD_MAX_SEC + 15.0) * config.FS)                  # long enough for the hold to expire
+    noise = 0.5 + np.random.default_rng(7).normal(0, 0.01, (n_noise, rgb.shape[1]))
+    t2 = t[-1] + (np.arange(n_noise) + 1) / config.FS
     step = int(config.UPDATE_SEC * config.FS)
     prev, poor = good, []
     for k, (ti, ci) in enumerate(zip(t2, noise)):
@@ -326,7 +327,7 @@ def test_small_moves_within_max_jump_pass_straight_through(monkeypatch):
     assert out[-1] == 80.0
 
 
-# ---- ROI freeze / re-lock (face_roi) ----
+# ---- ROI tracking (face_roi): a live box that follows the face, a measurement box held still inside a dead band
 
 class ScriptedDetector:
     """Replaces FaceROI._detect: returns whatever box is set now (None = miss)."""
@@ -355,51 +356,136 @@ def run_frames(roi, frame, det, t0, seconds, box_fn=None):
     return out
 
 
-def test_roi_freezes_after_lock_sec_despite_detector_jitter(monkeypatch):
+FACE_W = 200                                                           # width of the scripted face, px
+
+
+def face_at(x_centre, y=100):
+    return (int(round(x_centre - FACE_W / 2)), y, FACE_W, 250)
+
+
+def roi_centre(sample):
+    return sample.face_box[0] + sample.face_box[2] / 2
+
+
+def test_roi_holds_perfectly_still_on_a_still_face_despite_detector_jitter(monkeypatch):
     roi, det, frame = make_roi(monkeypatch)
     rng = np.random.default_rng(0)
-    jitter = lambda t: (200 + int(rng.integers(-3, 4)), 100 + int(rng.integers(-3, 4)), 200, 250)
+    jitter = lambda t: (200 + int(rng.integers(-3, 4)), 100 + int(rng.integers(-3, 4)), FACE_W, 250)
     samples = run_frames(roi, frame, det, 0.0, config.ROI_LOCK_SEC + 3.0, jitter)
-    frozen = [s for s in samples if s.t > config.ROI_LOCK_SEC + 0.2]
-    assert len({tuple(s.rois) for s in frozen}) == 1           # identical ROIs every frame once frozen
-    assert len({tuple(s.rois) for s in samples if s.t < config.ROI_LOCK_SEC - 0.2}) > 1   # EMA moving before
+    held = [s for s in samples if s.t > config.ROI_LOCK_SEC + 0.3]
+    assert len({tuple(s.rois) for s in held}) == 1                     # identical ROIs every frame once settled
+    assert len({tuple(s.rois) for s in samples if s.t < 1.0}) > 1      # while locking on, the box follows the face
 
 
-def test_relock_flag_fires_at_lock_start_and_at_freeze(monkeypatch):
+def test_flags_fire_at_lock_start_and_when_the_first_lock_settles(monkeypatch):
     roi, det, frame = make_roi(monkeypatch)
-    samples = run_frames(roi, frame, det, 0.0, config.ROI_LOCK_SEC + 2.0, lambda t: (200, 100, 200, 250))
+    samples = run_frames(roi, frame, det, 0.0, config.ROI_LOCK_SEC + 2.0, lambda t: face_at(300))
     flagged = [s.t for s in samples if s.relock]
     assert len(flagged) == 2
-    assert flagged[0] == 0.0 and abs(flagged[1] - config.ROI_LOCK_SEC) < 0.1
+    assert flagged[0] == 0.0 and abs(flagged[1] - config.ROI_LOCK_SEC) < 0.2
 
 
-def test_small_face_move_does_not_relock(monkeypatch):
+def test_a_move_inside_the_dead_band_does_not_move_the_roi(monkeypatch):
     roi, det, frame = make_roi(monkeypatch)
-    run_frames(roi, frame, det, 0.0, config.ROI_LOCK_SEC + 1.0, lambda t: (200, 100, 200, 250))
-    small = int(0.5 * config.RELOCK_MOVE_FRAC * 200)
-    after = run_frames(roi, frame, det, 3.1, 3.0, lambda t: (200 + small, 100, 200, 250))
+    before = run_frames(roi, frame, det, 0.0, config.ROI_LOCK_SEC + 1.0, lambda t: face_at(300))
+    small = 0.5 * config.RELOCK_MOVE_FRAC * FACE_W
+    after = run_frames(roi, frame, det, 3.1, 4.0, lambda t: face_at(300 + small))
     assert not any(s.relock for s in after)
+    assert {tuple(s.rois) for s in after} == {tuple(before[-1].rois)}
 
 
-def test_large_face_move_relocks_then_refreezes_at_new_position(monkeypatch):
+def test_a_real_move_is_followed_within_about_a_second_with_one_start_and_one_settle_flag(monkeypatch):
     roi, det, frame = make_roi(monkeypatch)
-    first = run_frames(roi, frame, det, 0.0, config.ROI_LOCK_SEC + 1.0, lambda t: (200, 100, 200, 250))
-    big = int(2 * config.RELOCK_MOVE_FRAC * 200)
-    after = run_frames(roi, frame, det, 3.1, config.ROI_LOCK_SEC + 3.0, lambda t: (200 + big, 100, 200, 250))
-    flagged = [s for s in after if s.relock]
-    assert len(flagged) == 2                                    # re-lock, then re-freeze
-    assert after[-1].rois != first[-1].rois
-    assert len({tuple(s.rois) for s in after if s.t > flagged[1].t + 0.1}) == 1
+    run_frames(roi, frame, det, 0.0, config.ROI_LOCK_SEC + 1.0, lambda t: face_at(300))
+    jump = 3 * config.RELOCK_MOVE_FRAC * FACE_W                        # 30 px
+    after = run_frames(roi, frame, det, 3.1, 4.0, lambda t: face_at(300 + jump))
+    caught = next(s for s in after if abs(roi_centre(s) - (300 + jump)) <= 6)
+    assert caught.t - 3.1 <= 1.2                                       # the measurement box has caught the face
+    flagged = [s.t for s in after if s.relock]
+    assert len(flagged) == 2 and flagged[1] - flagged[0] >= config.ROI_SETTLE_HOLD_SEC - 0.05
+    assert len({tuple(s.rois) for s in after if s.t > flagged[1] + 0.1}) == 1       # still afterwards
 
 
-def test_face_lost_then_found_elsewhere_relocks_without_ema_blend(monkeypatch):
+def test_one_or_two_wild_detections_are_ignored(monkeypatch):
     roi, det, frame = make_roi(monkeypatch)
-    run_frames(roi, frame, det, 0.0, config.ROI_LOCK_SEC + 1.0, lambda t: (200, 100, 200, 250))
+    wild = lambda t: face_at(300 + 170) if (3.0 <= t < 3.09 or 5.0 <= t < 5.19) else face_at(300)   # 1 detection, then 2 in a row
+    samples = run_frames(roi, frame, det, 0.0, 8.0, wild)
+    assert sum(s.relock for s in samples) == 2                         # only the first lock's two flags
+    assert {tuple(s.rois) for s in samples if s.t > config.ROI_LOCK_SEC + 0.3} == {tuple(samples[-1].rois)}
+
+
+def test_the_live_box_follows_the_face_while_the_measurement_box_holds(monkeypatch):
+    roi, det, frame = make_roi(monkeypatch)
+    run_frames(roi, frame, det, 0.0, config.ROI_LOCK_SEC + 1.0, lambda t: face_at(300))
+    drift = 0.9 * config.RELOCK_MOVE_FRAC * FACE_W                     # 9 px: inside the dead band
+    samples = run_frames(roi, frame, det, 3.1, 0.7, lambda t: face_at(300 + drift))   # shorter than ROI_STILL_SEC: no re-centre yet
+    live = roi.live_box
+    assert abs(live[0] + live[2] / 2 - (300 + drift)) <= 2             # the tracked face is where the face is
+    assert abs(roi_centre(samples[-1]) - 300) <= 1                     # the measurement box has not moved
+
+
+def test_preview_draws_the_live_face_box_and_not_the_held_one(monkeypatch):
+    roi, det, frame = make_roi(monkeypatch)
+    run_frames(roi, frame, det, 0.0, config.ROI_LOCK_SEC + 1.0, lambda t: face_at(300))
+    drift = 0.9 * config.RELOCK_MOVE_FRAC * FACE_W
+    sample = run_frames(roi, frame, det, 3.1, 0.7, lambda t: face_at(300 + drift))[-1]
+    scale = config.PREVIEW_W / frame.shape[1]
+    background = np.array([10, 100, 200])
+    def drawn(x_full):                                                 # how far the preview differs from the plain frame at a face-box left edge
+        x, y = int(round(x_full * scale)), int(round((100 + 125) * scale))
+        return int(np.abs(sample.preview[y - 1:y + 2, x - 1:x + 2].astype(int) - background).sum(axis=2).max())
+    live_left, held_left = roi.live_box[0], 300 - FACE_W / 2
+    assert drawn(live_left) > 100                                      # the grey box is drawn where the face is
+    assert drawn(held_left) < 20 and abs(live_left - held_left) >= 6   # and nothing outlines the old, held position
+
+
+def test_roi_follows_a_slow_sway_closely_with_few_flags(monkeypatch):
+    roi, det, frame = make_roi(monkeypatch)
+    sway = lambda t: 320 + 30 * np.sin(2 * np.pi * 0.15 * t)
+    samples = [s for s in run_frames(roi, frame, det, 0.0, 20.0, lambda t: face_at(sway(t))) if s.t > 3.0]
+    err = np.array([abs(roi_centre(s) - sway(s.t)) for s in samples])
+    assert err.mean() < 14 and err.max() < 30                          # the freeze design this replaced: mean 17, worst 58
+    assert sum(s.relock for s in samples) <= 16                        # continuous motion is one long follow, not dozens of seams
+
+
+def test_roi_follows_a_walking_face_and_comes_to_rest_close_to_it(monkeypatch):
+    roi, det, frame = make_roi(monkeypatch)
+    walk = lambda t: 320 + 15 * (min(max(t, 8.0), 14.0) - 8.0)       # 15 px/s for 6 s, then stops
+    samples = run_frames(roi, frame, det, 0.0, 24.0, lambda t: face_at(walk(t)))
+    moving = [abs(roi_centre(s) - walk(s.t)) for s in samples if 8.5 < s.t < 14]
+    assert np.mean(moving) < 13
+    rest = [s for s in samples if s.t > 19]
+    assert max(abs(roi_centre(s) - walk(s.t)) for s in rest) <= config.ROI_RECENTRE_FRAC * FACE_W + 1
+    assert len({tuple(s.rois) for s in rest}) == 1                    # and then perfectly still
+
+
+def test_a_small_leftover_offset_is_corrected_gently_without_flags(monkeypatch):
+    roi, det, frame = make_roi(monkeypatch)
+    run_frames(roi, frame, det, 0.0, config.ROI_LOCK_SEC + 1.0, lambda t: face_at(300))
+    offset = 0.8 * config.RELOCK_MOVE_FRAC * FACE_W                    # inside the dead band, but above the re-centre limit
+    assert offset > config.ROI_RECENTRE_FRAC * FACE_W
+    after = run_frames(roi, frame, det, 3.1, 4.0, lambda t: face_at(300 + offset))
+    assert not any(s.relock for s in after)                            # a gentle correction needs no level matching
+    assert abs(roi_centre(after[-1]) - (300 + offset)) <= config.ROI_SETTLE_FRAC * FACE_W + 1
+
+
+def test_a_poor_detector_does_not_make_the_roi_creep(monkeypatch):
+    roi, det, frame = make_roi(monkeypatch)
+    rng = np.random.default_rng(1)
+    samples = run_frames(roi, frame, det, 0.0, 30.0, lambda t: face_at(300 + rng.normal(0, 5)))
+    after = [s for s in samples if s.t > config.ROI_LOCK_SEC + 0.5]
+    assert sum(s.relock for s in samples) == 2                         # nothing beyond the first lock
+    assert np.abs(np.diff([roi_centre(s) for s in after])).sum() <= 6
+
+
+def test_face_lost_then_found_elsewhere_relocks_without_blending_with_the_old_position(monkeypatch):
+    roi, det, frame = make_roi(monkeypatch)
+    run_frames(roi, frame, det, 0.0, config.ROI_LOCK_SEC + 1.0, lambda t: face_at(300))
     gone = run_frames(roi, frame, det, 3.1, config.FACE_LOST_SEC + 0.5, lambda t: None)
     assert not gone[-1].face_found
-    back = run_frames(roi, frame, det, 4.8, 0.2, lambda t: (400, 100, 200, 250))
-    first = next(x for x in back if x.relock)                    # detection runs every DETECT_EVERY_N frames
-    assert first.face_box[0] == 400                              # hard set to the new box, no blend with the old one
+    back = run_frames(roi, frame, det, 4.8, 0.2, lambda t: face_at(500))
+    first = next(x for x in back if x.relock)                          # detection runs every DETECT_EVERY_N frames
+    assert first.face_box[0] + first.face_box[2] / 2 == 500            # the box is set to the new face, not blended
 
 
 def test_freeze_off_keeps_ema_tracking(monkeypatch):

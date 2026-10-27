@@ -1,7 +1,9 @@
 """Colour tokens, fonts, animation constants and the application stylesheet.
 
-The look is a black-and-grey, flat design taken from docs/ui_reference.html. Status colours are used sparingly;
-the only accents are white and grey.
+The look is an instrument display in black mode: a near-black base with a fine measurement grid that fades towards the
+edges, frosted rounded panels with a fine rim, one accent colour (clinical cyan: the pulse trace, the heartbeat dot, the
+primary action), and colour otherwise only where it carries meaning (good, fair, poor). Qt has no backdrop blur, so the
+frosting is painted (see ui/panels.py: paint_glass and Dashboard).
 """
 from __future__ import annotations
 
@@ -11,41 +13,73 @@ from PySide6.QtGui import QColor, QFont, QFontDatabase
 from PySide6.QtWidgets import QApplication
 
 # ---- surfaces
-BG = "#0A0A0A"                      # window background
-BG_HIGHLIGHT = "#1B1B1D"            # soft radial highlight at the top right
-PANEL_ALPHA = 0.035                 # panel fill: white at 3.5%
-PANEL_TOP_ALPHA = 0.05              # faint highlight along a panel's top edge
-PANEL = "#131313"                   # the panel fill flattened over BG, for widgets that cannot be translucent (plots)
-BORDER = "#26262A"
-VIDEO_BG = "#0D0D0E"
+BG = "#030406"                      # window background (near black)
+BG_TOP = "#070B10"                  # the background lifts to this at the top: a quiet change in the same hue
+# ambient light: one soft field in the same family, so the panels have something faint to frost against.
+# (centre x, centre y) as fractions of the window, radius as a fraction of its longer side, colour, peak alpha
+AURORA = (
+    (0.50, -0.15, 0.80, "#14343D", 0.22),
+)
+# the measurement grid behind everything: fine lines every GRID_MINOR_PX, a stronger line every GRID_MAJOR_EVERY-th,
+# small registration crosses where two strong lines meet, all fading towards the window edges
+GRID_COLOR = "#8FD3DE"
+GRID_MINOR_PX = 24
+GRID_MAJOR_EVERY = 5
+GRID_MINOR_ALPHA, GRID_MAJOR_ALPHA, GRID_CROSS_ALPHA = 0.06, 0.13, 0.30
+GRID_CROSS_ARM = 4                  # px
+GRID_FADE_MIN = 0.12                # grid strength at the far edge, relative to the centre
+PANEL_SCRIM_ALPHA = 0.72            # black laid under a panel's glass: dims the grid behind it (text sits on a calm surface; MUTED reaches 4.5:1 even at the brightest grid crossing)
+NOTCH_LEN = 30                      # px: the short accent segment on the top edge of a panel
+PANEL_GRID_MINOR_ALPHA, PANEL_GRID_MAJOR_ALPHA = 0.03, 0.06      # the same grid drawn inside the panels (no crosses)
+# the Light frame's edge light: white at the rim of the dashboard, falling off smoothly into the dark UI, whose corners
+# are rounded (like the macOS edge light). A solid band, then a smoothstep fade, around a rounded rectangle.
+LIGHT_GLOW_EDGE_PX = 10             # solid white inside the dashboard's edge, so it joins the white frame seamlessly
+LIGHT_GLOW_FADE_PX = 140            # width of the fade into the dark
+LIGHT_GLOW_FALLOFF = 0.85           # alpha = (1 - distance/width) ** this: bright near the rim, then falling away
+PANEL_SCRIM_ALPHA_LIGHT = 0.88      # panels get a darker scrim while the Light frame is on: dark glass cards on bright light
+LIGHT_GLOW_RADIUS = 52              # corner radius of the dark area
+PLOT_GRID_ALPHA = 0.09              # grid lines inside the two plots (like ECG paper)
+GLASS_TOP_ALPHA = 0.085             # panel fill: white, a little brighter at the top...
+GLASS_BOTTOM_ALPHA = 0.035          # ...fading to this at the bottom
+GLASS_RIM_TOP = 0.24                # rim: white at the top left...
+GLASS_RIM_BOTTOM = 0.06             # ...to this at the bottom right
+GLASS_SPECULAR = 0.20               # peak alpha of the thin highlight along the top edge
+PANEL = "#111A21"                   # a panel flattened over the background, for widgets that cannot be translucent
+BORDER = "#25313B"                  # dividers and empty tracks
+VIDEO_BG = "#05080B"
 
 # ---- text
-TEXT = "#E8E8E8"
-TEXT_SOFT = "#C8C8C8"
-MUTED = "#9A9A9A"
+TEXT = "#EAF0F4"
+TEXT_SOFT = "#C4CFD8"
+MUTED = "#AEBBC7"
 WHITE = "#FFFFFF"
 
 # ---- controls
-BTN_FILL = "#151516"
-BTN_BORDER = "#333336"
-BTN_FILL_HOVER = "#1F1F21"
-BTN_BORDER_HOVER = "#4A4A4E"
-PRIMARY_FILL = "#EDEDED"
-PRIMARY_FILL_HOVER = "#FFFFFF"
-PRIMARY_TEXT = "#0A0A0A"
-FIELD_FILL = "#0E0E0F"
-PLACEHOLDER = "#7E7E82"
-FOCUS = "#BDBDBD"
-CHECKED_BORDER = "#BDBDBD"
-DISABLED_TEXT = "#5A5A5E"
+BTN_FILL = "#16202A"                # solid versions, for popups and the tooltip (which cannot be translucent)
+BTN_BORDER = "#33414D"
+BTN_FILL_HOVER = "#1E2B37"
+BTN_BORDER_HOVER = "#4C5E6D"
+BTN_ALPHA, BTN_ALPHA_HOVER, BTN_ALPHA_CHECKED = 0.06, 0.12, 0.16      # a glass control: white at this alpha
+BTN_RIM, BTN_RIM_HOVER = 0.16, 0.36                                    # its 1 px rim: white at this alpha
+ACCENT = "#4CC9D8"                  # clinical cyan: the pulse trace, the heartbeat dot, the primary action
+PRIMARY_FILL = ACCENT
+PRIMARY_FILL_HOVER = "#7EDCE8"
+PRIMARY_FILL_LOW = "#34AEBF"        # the primary button fades to this at the bottom
+PRIMARY_TEXT = "#04212A"
+FIELD_FILL = "#0A1218"
+FIELD_ALPHA, FIELD_RIM = 0.05, 0.16
+PLACEHOLDER = "#9AA8B4"
+FOCUS = "#7EDCE8"
+CHECKED_BORDER = ACCENT
+DISABLED_TEXT = "#5A6874"
 
 # ---- status colours (dots and text) and signal-quality zones
-GOOD = "#7FBF9E"
-FAIR = "#C9A85F"
-POOR = "#B26A78"
-ZONE_GOOD = "#477A60"
-ZONE_FAIR = "#8A7447"
-ZONE_POOR = "#7A4450"
+GOOD = "#3DDC97"
+FAIR = "#F2B84B"
+POOR = "#FF6B6B"
+ZONE_GOOD = "#2E9E72"
+ZONE_FAIR = "#C79A3C"
+ZONE_POOR = "#C25454"
 LIGHT_FRAME = "#FFFFFF"
 
 QUALITY_COLOR = {"good": GOOD, "fair": FAIR, "poor": POOR, "n/a": MUTED}
@@ -54,9 +88,9 @@ HINT_COLOR = {"info": MUTED, "ok": TEXT_SOFT, "warn": FAIR, "error": POOR}
 STATE_DOT_COLOR = {"info": DISABLED_TEXT, "ok": GOOD, "warn": FAIR, "error": POOR}
 
 # ---- video tags, signal-quality scale
-TAG_FILL = (0, 0, 0, 140)           # rgba(0, 0, 0, .55)
-TAG_BORDER = "#2C2C2F"
-TAG_TEXT = "#C8C8C8"
+TAG_FILL = (6, 12, 16, 160)         # a dark frosted tag on top of the video
+TAG_BORDER = "#33414D"
+TAG_TEXT = "#D5DEE6"
 SNR_SCALE_LO, SNR_SCALE_HI = -4.0, 8.0     # dB range of the quality scale
 SHARE_WINDOW_SEC = 60.0                    # "last 60 s of windows"
 LIGHT_MAX = 255.0                          # the light bar's full scale (0-255 camera values)
@@ -72,18 +106,21 @@ PULSE_TAIL_SEC = 5.0                # the live pulse strip shows the newest 5 s
 PULSE_STRIP_H, PULSE_STRIP_MIN_H = 54, 28
 BEAT_RING_SCALE = 2.4               # the heartbeat ring grows 1 to 2.4 times and fades from 0.7 to 0
 BEAT_RING_ALPHA = 0.7
-CARD_BORDER_ACTIVE = "#D6D6D6"
-LIGHT_TRACK = "#2A2A2D"
-LIGHT_FILL = "#BDBDBD"
-LIGHT_TICK = "#8C8C8C"
+CARD_BORDER_ACTIVE = ACCENT
+LIGHT_TRACK = "#25313B"
+LIGHT_FILL = "#8FB8C2"
+LIGHT_TICK = "#8896A3"
 SPECTRUM_TICKS_BPM = (54, 90, 120, 150, 180)
-SPECTRUM_LINE = "#DADADA"
+SPECTRUM_LINE = "#CFEFF4"
 
 # ---- sizes (px)
 SPACING = 16                        # gap between panels
 MARGIN = 24                         # outer margin of the dashboard
-RADIUS = 12                         # panels
-CONTROL_RADIUS = 8
+RADIUS = 20                         # panels
+CARD_RADIUS = 16                    # the method cards
+VIDEO_RADIUS = 16
+TAG_RADIUS = 8
+CONTROL_RADIUS = 14                 # rounded rectangles, not pills (an icon-only button is a rounded square)
 TOPBAR_H = 56
 CONTROL_H = 40
 LEFT_MAX_W = 600
@@ -156,17 +193,17 @@ def stylesheet() -> str:
     return f"""
     QWidget {{ color: {TEXT}; }}
     #stat {{ color: {MUTED}; font-size: {STAT_FONT_PX}px; }}
-    #video {{ background: {VIDEO_BG}; border: none; border-radius: {CONTROL_RADIUS}px; color: {MUTED}; }}
+    #video {{ background: transparent; border: none; color: {MUTED}; }}
     QComboBox QAbstractItemView {{
-        background: {BTN_FILL}; border: 1px solid {BTN_BORDER}; selection-background-color: {BTN_FILL_HOVER};
-        selection-color: {WHITE}; color: {TEXT}; outline: 0; padding: 4px;
+        background: {BTN_FILL}; border: 1px solid {BTN_BORDER}; border-radius: 14px;
+        selection-background-color: {BTN_FILL_HOVER}; selection-color: {WHITE}; color: {TEXT}; outline: 0; padding: 6px;
     }}
     QLineEdit {{
-        background: {FIELD_FILL}; border: 1px solid {BTN_BORDER}; border-radius: {CONTROL_RADIUS}px;
-        padding: 0 14px; font-size: {STAT_FONT_PX}px; color: {TEXT}; placeholder-text-color: {PLACEHOLDER};
-        selection-background-color: {BTN_BORDER_HOVER};
+        background: rgba(255, 255, 255, {int(FIELD_ALPHA * 255)}); border: 1px solid rgba(255, 255, 255, {int(FIELD_RIM * 255)});
+        border-radius: {CONTROL_RADIUS}px; padding: 0 16px; font-size: {STAT_FONT_PX}px; color: {TEXT};
+        placeholder-text-color: {PLACEHOLDER}; selection-background-color: {BTN_BORDER_HOVER};
     }}
-    QLineEdit:hover {{ border: 1px solid {BTN_BORDER_HOVER}; }}
-    QLineEdit:focus {{ border: 1px solid {FOCUS}; }}
-    QToolTip {{ background: {BTN_FILL}; color: {TEXT}; border: 1px solid {BTN_BORDER}; padding: 4px 6px; }}
+    QLineEdit:hover {{ border: 1px solid rgba(255, 255, 255, {int(BTN_RIM_HOVER * 255)}); }}
+    QLineEdit:focus {{ border: 1px solid {FOCUS}; background: rgba(255, 255, 255, {int(BTN_ALPHA_HOVER * 255)}); }}
+    QToolTip {{ background: {BTN_FILL}; color: {TEXT}; border: 1px solid {BTN_BORDER}; border-radius: 8px; padding: 5px 8px; }}
     """
